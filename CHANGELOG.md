@@ -47,6 +47,12 @@
 - Added Pydantic Schema layer for data digestibility.
 - Integrated Camofox for enhanced anti-bot scraping.
 
+## [0.2.1] — 2026-04-11
+### Added
+- Remote GitHub repository linked.
+- Multi-branch strategy initialized (`main`, `dev`).
+- Successful first push to origin.
+
 *Versions follow semantic versioning — major.minor.patch*
 *Major: breaking architecture change*
 *Minor: new feature or plugin added*

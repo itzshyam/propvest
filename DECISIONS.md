@@ -201,4 +201,9 @@ Each decision follows this structure:
 **Decision:** Use a single Hermes brain with three specific profiles: Coordinator (Routing), Researcher (Skills), and Auditor (Veto/Review).
 **Rationale:** Avoids "Agent Sprawl" and multi-agent latency while providing high-quality review for the Top 10% suburbs.
 
+### Version Control — Branching Strategy
+**Decision:** Use a `main` and `dev` branch structure.
+**Rationale:** Standard practice to protect `main` for stable releases while using `dev` for active feature work and agent testing.
+**Trade-offs:** Requires manual merges/PRs, but provides a safety buffer for agent-generated code.
+
 > Always run 30-suburb eval set before changing weights. Log changes here with rationale.
