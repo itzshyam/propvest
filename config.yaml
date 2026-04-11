@@ -1,0 +1,100 @@
+# Propvest — Plugin Registry & Feature Flags
+# This is the single source of truth for all plugin configuration.
+# Enable/disable any component here without touching code.
+# AI tools: check this file before adding new dependencies.
+
+# ---
+# SCORING MODEL
+# ---
+scoring_weights:
+  vacancy_rate:      0.25   # strongest demand signal
+  stock_on_market:   0.20   # supply constraint signal
+  population_growth: 0.20   # long term demand driver
+  infra_pipeline:    0.20   # forward-looking alpha signal
+  relative_median:   0.15   # relative value entry point
+
+scoring_model_version: "v1.0"  # increment when weights change, log in DECISIONS.md
+
+# ---
+# PLUGINS
+# ---
+plugins:
+
+  # Scrapers
+  scrapers:
+    rea:        enabled     # REA suburb profiles + median prices
+    sqm:        enabled     # vacancy rates + stock on market
+    abs:        enabled     # population data (bulk CSV download)
+    domain:     disabled    # future — enable if REA becomes unreliable
+    corelogic:  disabled    # future — enable if paid access acquired
+
+  # Signals
+  signals:
+    vacancy_rate:      enabled
+    stock_on_market:   enabled
+    population_growth: enabled
+    infra_pipeline:    enabled
+    relative_median:   enabled
+    price_trajectory:  disabled   # stored but excluded from v1 scoring
+
+  # RAG layer
+  rag: llamaindex             # swap to: langchain (zero code changes)
+
+  # LLM
+  llm:
+    primary:  claude
+    fallback: openai          # only used if claude unavailable
+
+  # Cache
+  cache:
+    provider: redis
+    ttl_hours: 48             # scorecard cache duration
+
+  # Outputs
+  outputs:
+    supabase:    enabled
+    csv_export:  disabled     # enable for data export feature
+    alerts:      enabled
+
+# ---
+# TOKEN EFFICIENCY
+# ---
+token_budgets:
+  scoring_summary: 300    # short synthesis
+  deep_dive:       800    # full suburb analysis
+  chat_response:   500    # conversational answer
+  infra_parse:     600    # pipeline document parsing
+
+# ---
+# SCRAPING
+# ---
+scraping:
+  async: true
+  max_concurrent: 5         # parallel suburb scrapes
+  retry_attempts: 3
+  retry_delay_seconds: 10
+  cadence:
+    rea:  weekly
+    sqm:  weekly
+    abs:  monthly           # ABS data changes slowly
+
+# ---
+# HERMES
+# ---
+hermes:
+  workspace: "C:\\Users\\itzsh\\Documents\\Projects\\Propvest"
+  heartbeat_interval_minutes: 30
+  alert_on_score_shift: 10  # points — alert if suburb score shifts this much
+  eval_divergence_threshold: 15  # points — alert if eval set diverges this much
+
+# ---
+# KNOWLEDGE DROP
+# ---
+knowledge_drop:
+  watch_folder: "./knowledge-drop"
+  auto_index: true
+  supported_formats:
+    - .pdf
+    - .md
+    - .txt
+    - .html

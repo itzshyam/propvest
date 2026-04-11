@@ -1,0 +1,55 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Local only — do not share
+PROJECT.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Logs
+/logs/
+*.log
+
+# Node / Frontend
+node_modules/
+.next/
+out/
+.npm/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Redis
+dump.rdb
+
+# Coverage
+.coverage
+htmlcov/
+
+# Secrets / Keys
+*.pem
+*.key
+*.cert
