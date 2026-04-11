@@ -1,0 +1,20 @@
+# Core
+pydantic>=2.0,<3.0
+
+# ABS Ingestor (Phase 1)
+pandas>=2.0,<3.0
+requests>=2.31,<3.0
+
+# Config
+pyyaml>=6.0,<7.0
+
+# Database
+supabase>=2.0,<3.0
+
+# Scraping (Phase 1 prep — activate when scrapers are built)
+# crawl4ai
+# scrapegraphai
+
+# Backend (Phase 2)
+# fastapi
+# uvicorn[standard]
