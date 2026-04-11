@@ -119,20 +119,32 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
 ```
 /Propvest
   /core
+    __init__.py
     /schemas              ← Pydantic models (The "Contract")
-    config.yaml           ← plugin registry + weights
+      __init__.py         ← exports Suburb, DataSignal, SuburbScorecard
+      suburb.py           ✓ BUILT — Suburb model with is_tier_1 flag
+      signals.py          ✓ BUILT — DataSignal model
+      scorecard.py        ✓ BUILT — SuburbScorecard model
+  config.yaml             ← plugin registry + weights + data_filters thresholds
   /plugins
+    __init__.py
     /scrapers
-      base_scraper.py
-      rea_camofox.py      ← Playwright anti-bot
-      sqm/
-      abs_ingestor.py     ← Population filter
+      __init__.py
+      base_scraper.py     ✓ BUILT — abstract base + log_run() stub
+      abs_ingestor.py     ✓ BUILT — Growth Funnel cold filter (8,639 Tier 1 suburbs)
+      rea_camofox.py      ← TODO: Playwright anti-bot (Phase 1 Step 4)
+      sqm/                ← TODO: SQM vacancy + stock scraper
     /scoring
-      deterministic.py    ← Weighted math + Re-weighting logic
-  /workflows              ← Windmill script definitions
+      deterministic.py    ← TODO: Weighted math + Re-weighting logic
+  /data
+    /raw
+      /abs                ← ABS source files (gitignored)
+      tier1_candidates.json  ← 8,639 Tier 1 suburbs (gitignored, regeneratable)
+      scrape_log.json     ← append-only run log (gitignored)
+  /workflows              ← TODO: Windmill script definitions
   /skills                 ← Hermes SKILL.md files
-  /api                    ← FastAPI endpoints
-  /frontend               ← Next.js
+  /api                    ← TODO: FastAPI endpoints (Phase 2)
+  /frontend               ← TODO: Next.js (Phase 2)
 ```
 
 ---
@@ -169,6 +181,6 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
 
 ---
 
-*Last updated: Session 2 — Windmill/Funnel Pivot*
-*Next: Phase 1 build — Schema definition and ABS Ingestor*
+*Last updated: Session 3 — Phase 1 build, ABS Ingestor complete*
+*Next: Phase 1 — Windmill local workspace + first Tier 1 scrape (Crawl4AI + Camofox)*
 ```
