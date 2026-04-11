@@ -3,6 +3,7 @@ pydantic>=2.0,<3.0
 
 # ABS Ingestor (Phase 1)
 pandas>=2.0,<3.0
+openpyxl>=3.1,<4.0   # Excel reading for ABS datacube files
 requests>=2.31,<3.0
 
 # Config

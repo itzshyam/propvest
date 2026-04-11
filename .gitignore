@@ -42,6 +42,16 @@ desktop.ini
 .vscode/
 *.code-workspace
 
+# Claude Code — local IDE settings (permissions, not project config)
+.claude/
+
+# ABS source data — large files, manually downloaded, not regeneratable by CI
+data/raw/abs/
+
+# Regeneratable pipeline outputs
+data/raw/tier1_candidates.json
+data/raw/scrape_log.json
+
 # Redis
 dump.rdb
 

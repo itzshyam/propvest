@@ -66,6 +66,13 @@ token_budgets:
   infra_parse:     600    # pipeline document parsing
 
 # ---
+# DATA FILTERS (Growth Funnel thresholds — change here, not in code)
+# ---
+data_filters:
+  lga_min_population: 20000   # LGAs below this are excluded from Tier 1
+  lga_min_growth_pct: 0.5     # Annual ERP growth % required to qualify
+
+# ---
 # SCRAPING
 # ---
 scraping:

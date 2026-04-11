@@ -193,8 +193,8 @@ Each decision follows this structure:
 **Revisit when:** System needs more visual, non-technical "no-code" logic.
 
 ### Data Funnel — Tiered Strategy
-**Decision:** Filter 15,000 suburbs down to ~3,000 "Tier 1" candidates based on LGA metrics (20k pop / 1.5% growth).
-**Rationale:** Reduces bot-detection risk on REA/Domain by 80% and focuses compute on high-alpha markets.
+**Decision:** Filter 15,000 suburbs down to Tier 1 candidates based on LGA metrics (pop > 20k, growth > 0.5%).
+**Rationale:** Reduces bot-detection risk on REA/Domain by ~80% and focuses compute on high-alpha markets. Initial threshold of 1.5% produced only 83 LGAs — too restrictive for national coverage. Lowered to 0.5% → 193 LGAs → 8,639 suburbs, which better represents growth markets across all states.
 **Revisit when:** A user explicitly requests data for a "Tier 2" suburb (triggers on-demand scrape).
 
 ### Agent Logic — Hermes Profiles
@@ -207,3 +207,28 @@ Each decision follows this structure:
 **Trade-offs:** Requires manual merges/PRs, but provides a safety buffer for agent-generated code.
 
 > Always run 30-suburb eval set before changing weights. Log changes here with rationale.
+
+---
+
+## Session 3 Decisions
+
+### Growth Funnel Threshold — 1.5% → 0.5%
+**Decision:** Lower `lga_min_growth_pct` in `config.yaml` from 1.5% to 0.5%.
+**Options considered:** Keep 1.5% (83 LGAs, ~900 suburbs — too narrow); lower to 0.5% (193 LGAs, 8,639 suburbs); lower to 0% (all LGAs with pop > 20k — too broad, defeats funnel purpose).
+**Rationale:** 83 LGAs at 1.5% excluded many legitimate growth markets, particularly regional QLD and WA where growth is solid but below the metro rate. 0.5% captures sustained positive growth without including flat or declining markets.
+**Trade-offs:** More scrape volume. Accepted — scraping is async and tiered.
+**Revisit when:** Scrape costs or bot-detection pressure increases significantly.
+
+### ABS Data Source — SAL replaces SSC
+**Decision:** ASGS suburb concordance now uses SAL (Suburb and Locality) codes, not SSC (State Suburb Codes).
+**Options considered:** N/A — ABS made this change in their 2021 ASGS edition. Not a design choice.
+**Rationale:** ABS renamed the geographic structure. `abs_ingestor.py` detects both naming conventions automatically (`SAL_CODE_2021`, `SSC_CODE_2021`) so future ABS format changes are handled without code changes.
+**Trade-offs:** None.
+**Revisit when:** ABS releases a new ASGS edition (next expected ~2026).
+
+### scrape_log — File-based Until Supabase Is Wired
+**Decision:** `base_scraper.log_run()` writes to `data/raw/scrape_log.json` rather than Supabase for now.
+**Options considered:** Skip logging until DB is ready; write to Supabase immediately.
+**Rationale:** Preserving the logging contract from day one means the Supabase swap is a one-line body replacement in `log_run()`. File-based log is sufficient for Phase 1 debugging.
+**Trade-offs:** Logs are local only. Hermes cannot read them until Supabase is wired.
+**Revisit when:** Supabase is connected (Phase 1 Step 3 — Windmill setup).
