@@ -7,13 +7,13 @@
 
 ## Frequency
 
-| Task type | Cadence |
-|-----------|---------|
-| Scrape health check | Every 30 min |
-| Score drift alert | Every 30 min |
+| Task type              | Cadence      |
+| ---------------------- | ------------ |
+| Scrape health check    | Every 30 min |
+| Score drift alert      | Every 30 min |
 | Knowledge drop watcher | Every 30 min |
-| Site structure check | Daily |
-| Eval set validation | Weekly |
+| Site structure check   | Daily        |
+| Eval set validation    | Weekly       |
 
 ---
 
@@ -72,12 +72,12 @@ alerts:
 
 Hermes should self-improve these skills based on outcomes:
 
-| Skill | Trigger for improvement |
-|-------|------------------------|
-| `scrape_rea.md` | Scrape returns <50% expected rows |
-| `scrape_sqm.md` | Scrape returns <50% expected rows |
-| `parse_infra_pipeline.md` | LLM extraction confidence <70% |
-| `score_suburb.md` | Eval set divergence >15 points |
+| Skill                     | Trigger for improvement           |
+| ------------------------- | --------------------------------- |
+| `scrape_rea.md`           | Scrape returns <50% expected rows |
+| `scrape_sqm.md`           | Scrape returns <50% expected rows |
+| `parse_infra_pipeline.md` | LLM extraction confidence <70%    |
+| `score_suburb.md`         | Eval set divergence >15 points    |
 
 ---
 
@@ -87,21 +87,21 @@ Hermes should self-improve these skills based on outcomes:
 
 These files are gitignored and regeneratable — but Hermes should know they exist:
 
-| File | Purpose | Regenerate with |
-|------|---------|-----------------|
-| `data/raw/abs/erp_lga.csv` | Cached ABS ERP parse (546 LGAs) | Delete + re-run `abs_ingestor.py` |
-| `data/raw/abs/ssc_to_lga.csv` | Cached SAL→LGA concordance (16,630 rows) | Delete + re-run `abs_ingestor.py` |
-| `data/raw/tier1_candidates.json` | 8,639 Tier 1 suburbs | `python -m plugins.scrapers.abs_ingestor` |
-| `data/raw/scrape_log.json` | Run log (all scraper runs) | Append-only, do not delete |
+| File                             | Purpose                                  | Regenerate with                           |
+| -------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| `data/raw/abs/erp_lga.csv`       | Cached ABS ERP parse (546 LGAs)          | Delete + re-run `abs_ingestor.py`         |
+| `data/raw/abs/ssc_to_lga.csv`    | Cached SAL→LGA concordance (16,630 rows) | Delete + re-run `abs_ingestor.py`         |
+| `data/raw/tier1_candidates.json` | 8,639 Tier 1 suburbs                     | `python -m plugins.scrapers.abs_ingestor` |
+| `data/raw/scrape_log.json`       | Run log (all scraper runs)               | Append-only, do not delete                |
 
 Manual source files (user downloads — not regeneratable automatically):
 
-| File | Source |
-|------|--------|
-| `data/raw/abs/erp_lga_manual.xlsx` | ABS Regional Population 2024–25 datacube |
+| File                                 | Source                                      |
+| ------------------------------------ | ------------------------------------------- |
+| `data/raw/abs/erp_lga_manual.xlsx`   | ABS Regional Population 2024–25 datacube    |
 | `data/raw/abs/sal_to_lga_manual.csv` | ABS ASGS SAL→LGA concordance (2021 edition) |
 
 ---
 
-*Last updated: Session 3*
-*Hermes workspace: C:\Users\itzsh\Documents\Projects\Propvest*
+_Last updated: Session 3_
+_Hermes workspace: C:\Users\itzsh\Documents\Projects\Propvest_

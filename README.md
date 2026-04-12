@@ -18,13 +18,13 @@ Propvest aggregates fragmented Australian property data (REA, Domain, SQM Resear
 
 ## Signals (Scoring Model)
 
-| Signal | Weight |
-|--------|--------|
-| Vacancy rate | 25% |
-| Stock on market | 20% |
-| Population growth | 20% |
-| Infrastructure pipeline | 20% |
-| Relative median vs neighbours | 15% |
+| Signal                        | Weight |
+| ----------------------------- | ------ |
+| Vacancy rate                  | 25%    |
+| Stock on market               | 20%    |
+| Population growth             | 20%    |
+| Infrastructure pipeline       | 20%    |
+| Relative median vs neighbours | 15%    |
 
 Scoring is fully deterministic — the LLM explains scores, never computes them.
 
@@ -32,18 +32,18 @@ Scoring is fully deterministic — the LLM explains scores, never computes them.
 
 ## Tech Stack
 
-| Layer | Tool |
-|-------|------|
+| Layer         | Tool                   |
+| ------------- | ---------------------- |
 | Agent runtime | Hermes (Nous Research) |
-| Scraping | Crawl4AI |
-| Infra parsing | ScrapeGraphAI |
-| Orchestration | n8n |
-| Database | Supabase (Postgres) |
-| Cache | Redis |
-| RAG | LlamaIndex |
-| LLM | Claude API |
-| Backend | FastAPI |
-| Frontend | Next.js |
+| Scraping      | Crawl4AI               |
+| Infra parsing | ScrapeGraphAI          |
+| Orchestration | n8n                    |
+| Database      | Supabase (Postgres)    |
+| Cache         | Redis                  |
+| RAG           | LlamaIndex             |
+| LLM           | Claude API             |
+| Backend       | FastAPI                |
+| Frontend      | Next.js                |
 
 **Estimated cost: ~$5–18/mo**
 

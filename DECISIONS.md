@@ -8,6 +8,7 @@
 ## Format
 
 Each decision follows this structure:
+
 - **Decision:** what was decided
 - **Options considered:** what else was on the table
 - **Rationale:** why this choice was made
@@ -25,6 +26,7 @@ Each decision follows this structure:
 **Decision:** Use Hermes (Nous Research) as the agent runtime and scheduler.
 
 **Options considered:**
+
 - OpenClaw — mature ecosystem, strong plugin breadth
 - Custom agent loop (LangGraph / LangChain)
 
@@ -41,6 +43,7 @@ Each decision follows this structure:
 **Decision:** Use Crawl4AI as the primary scraper for REA, Domain, and SQM.
 
 **Options considered:**
+
 - Scrapy — battle-tested but poor JS support
 - Playwright alone — requires manual wiring
 - Firecrawl — purpose-built for RAG but paid at scale
@@ -58,6 +61,7 @@ Each decision follows this structure:
 **Decision:** Use ScrapeGraphAI for parsing unstructured infrastructure sources (state gov portals, planning PDFs, news).
 
 **Options considered:**
+
 - Custom Playwright + regex — brittle, breaks constantly
 - Crawl4AI with LLM extraction — possible but ScrapeGraphAI is purpose-built
 
@@ -74,6 +78,7 @@ Each decision follows this structure:
 **Decision:** Use LlamaIndex as the RAG layer for suburb retrieval and knowledge drop ingestion.
 
 **Options considered:**
+
 - LangChain — broader but more boilerplate
 - Custom vector store — too much overhead for v1
 
@@ -90,6 +95,7 @@ Each decision follows this structure:
 **Decision:** Use n8n for workflow orchestration, scrape job scheduling, and alerting.
 
 **Options considered:**
+
 - GitHub Actions cron — free but limited, no visual debugging
 - Prefect / Airflow — overkill for current scale
 - Custom scheduler — unnecessary build
@@ -107,6 +113,7 @@ Each decision follows this structure:
 **Decision:** Use Claude API as primary LLM, connected via MCP tools. OpenAI as fallback via config only.
 
 **Options considered:**
+
 - OpenAI GPT-4o — strong but Claude better for structured output + long context
 - Local models via Ollama — free but quality gap for reasoning tasks
 
@@ -123,6 +130,7 @@ Each decision follows this structure:
 **Decision:** Suburb scores are computed by deterministic weighted math only. LLM never computes a score.
 
 **Options considered:**
+
 - LLM-assisted scoring — flexible but hallucination risk
 - ML model — future consideration, not v1
 
@@ -139,6 +147,7 @@ Each decision follows this structure:
 **Decision:** All business logic lives in plugins. Core only orchestrates. Plugins communicate via event bus.
 
 **Options considered:**
+
 - Monolithic — faster to start, harder to scale
 - Microservices — too complex for current stage
 
@@ -155,6 +164,7 @@ Each decision follows this structure:
 **Decision:** All project files, skill files, knowledge drop content stored as Markdown.
 
 **Options considered:**
+
 - JSON — machine readable but not human or agent friendly
 - Plain text — no structure
 - Word/PDF — not git-trackable or token efficient
@@ -170,6 +180,7 @@ Each decision follows this structure:
 **Decision:** agents.md (public) tells all AI tools to read PROJECT.md (gitignored) first every session.
 
 **Options considered:**
+
 - Paste context manually each session — tedious and error-prone
 - Single context file — mixes public and private
 
@@ -181,27 +192,31 @@ Each decision follows this structure:
 
 ## Scoring Weights History
 
-| Version | Date | vacancy | stock | population | infra | relative_median | Notes |
-|---------|------|---------|-------|------------|-------|-----------------|-------|
-| v1.0 | Session 1 | 0.25 | 0.20 | 0.20 | 0.20 | 0.15 | Initial weights — validate against eval set before changing |
+| Version | Date      | vacancy | stock | population | infra | relative_median | Notes                                                       |
+| ------- | --------- | ------- | ----- | ---------- | ----- | --------------- | ----------------------------------------------------------- |
+| v1.0    | Session 1 | 0.25    | 0.20  | 0.20       | 0.20  | 0.15            | Initial weights — validate against eval set before changing |
 
 ## Session 2 Decisions
 
 ### Orchestration — Windmill.dev
+
 **Decision:** Use Windmill instead of n8n.
 **Rationale:** Windmill supports "Workflow-as-code" using typed Python. This allows us to use Pydantic schemas to ensure the "digestible data" requirement is met with high engineering rigor.
 **Revisit when:** System needs more visual, non-technical "no-code" logic.
 
 ### Data Funnel — Tiered Strategy
+
 **Decision:** Filter 15,000 suburbs down to Tier 1 candidates based on LGA metrics (pop > 20k, growth > 0.5%).
 **Rationale:** Reduces bot-detection risk on REA/Domain by ~80% and focuses compute on high-alpha markets. Initial threshold of 1.5% produced only 83 LGAs — too restrictive for national coverage. Lowered to 0.5% → 193 LGAs → 8,639 suburbs, which better represents growth markets across all states.
 **Revisit when:** A user explicitly requests data for a "Tier 2" suburb (triggers on-demand scrape).
 
 ### Agent Logic — Hermes Profiles
+
 **Decision:** Use a single Hermes brain with three specific profiles: Coordinator (Routing), Researcher (Skills), and Auditor (Veto/Review).
 **Rationale:** Avoids "Agent Sprawl" and multi-agent latency while providing high-quality review for the Top 10% suburbs.
 
 ### Version Control — Branching Strategy
+
 **Decision:** Use a `main` and `dev` branch structure.
 **Rationale:** Standard practice to protect `main` for stable releases while using `dev` for active feature work and agent testing.
 **Trade-offs:** Requires manual merges/PRs, but provides a safety buffer for agent-generated code.
@@ -213,6 +228,7 @@ Each decision follows this structure:
 ## Session 3 Decisions
 
 ### Growth Funnel Threshold — 1.5% → 0.5%
+
 **Decision:** Lower `lga_min_growth_pct` in `config.yaml` from 1.5% to 0.5%.
 **Options considered:** Keep 1.5% (83 LGAs, ~900 suburbs — too narrow); lower to 0.5% (193 LGAs, 8,639 suburbs); lower to 0% (all LGAs with pop > 20k — too broad, defeats funnel purpose).
 **Rationale:** 83 LGAs at 1.5% excluded many legitimate growth markets, particularly regional QLD and WA where growth is solid but below the metro rate. 0.5% captures sustained positive growth without including flat or declining markets.
@@ -220,6 +236,7 @@ Each decision follows this structure:
 **Revisit when:** Scrape costs or bot-detection pressure increases significantly.
 
 ### ABS Data Source — SAL replaces SSC
+
 **Decision:** ASGS suburb concordance now uses SAL (Suburb and Locality) codes, not SSC (State Suburb Codes).
 **Options considered:** N/A — ABS made this change in their 2021 ASGS edition. Not a design choice.
 **Rationale:** ABS renamed the geographic structure. `abs_ingestor.py` detects both naming conventions automatically (`SAL_CODE_2021`, `SSC_CODE_2021`) so future ABS format changes are handled without code changes.
@@ -227,6 +244,7 @@ Each decision follows this structure:
 **Revisit when:** ABS releases a new ASGS edition (next expected ~2026).
 
 ### scrape_log — File-based Until Supabase Is Wired
+
 **Decision:** `base_scraper.log_run()` writes to `data/raw/scrape_log.json` rather than Supabase for now.
 **Options considered:** Skip logging until DB is ready; write to Supabase immediately.
 **Rationale:** Preserving the logging contract from day one means the Supabase swap is a one-line body replacement in `log_run()`. File-based log is sufficient for Phase 1 debugging.

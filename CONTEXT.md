@@ -7,12 +7,12 @@
 
 ## Investor Profile
 
-| Attribute | Detail |
-|-----------|--------|
-| Strategy | Buy and hold — capital growth focus |
-| Geography | All of Australia (~15,000 suburbs) |
-| Asset class | Residential property |
-| Horizon | Long term (7–10+ years) |
+| Attribute     | Detail                                     |
+| ------------- | ------------------------------------------ |
+| Strategy      | Buy and hold — capital growth focus        |
+| Geography     | All of Australia (~15,000 suburbs)         |
+| Asset class   | Residential property                       |
+| Horizon       | Long term (7–10+ years)                    |
 | Risk appetite | Moderate — growth focused, not speculative |
 
 ---
@@ -20,6 +20,7 @@
 ## What "Good" Looks Like
 
 A high-scoring suburb for this investor has:
+
 - Low and falling vacancy rate (strong rental demand)
 - Low stock on market (supply constrained)
 - Population growing faster than state average
@@ -42,11 +43,11 @@ A high-scoring suburb for this investor has:
 
 ```yaml
 scoring_weights:
-  vacancy_rate:      0.25   # strongest demand signal
-  stock_on_market:   0.20   # supply constraint signal
-  population_growth: 0.20   # long term demand driver
-  infra_pipeline:    0.20   # forward-looking alpha signal
-  relative_median:   0.15   # relative value entry point
+  vacancy_rate: 0.25 # strongest demand signal
+  stock_on_market: 0.20 # supply constraint signal
+  population_growth: 0.20 # long term demand driver
+  infra_pipeline: 0.20 # forward-looking alpha signal
+  relative_median: 0.15 # relative value entry point
 ```
 
 > See DECISIONS.md → Scoring Weights History before changing any value.
@@ -72,5 +73,5 @@ scoring_weights:
 
 ---
 
-*Last updated: Session 1*
-*Weights version: v1.0 — see DECISIONS.md for change history*
+_Last updated: Session 1_
+_Weights version: v1.0 — see DECISIONS.md for change history_

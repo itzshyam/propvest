@@ -1,4 +1,3 @@
-
 > **Source of truth for all AI tools (Hermes, Claude Code, Cowork) and contributors.**
 > Read this before touching any code.
 
@@ -16,12 +15,12 @@ Propvest is a personal → shareable → productisable property research assista
 
 Every decision is evaluated against these in order. No exceptions.
 
-| Priority | Absolute | What it means |
-|----------|----------|---------------|
-| 1 | **Cost friendly** | Minimise infrastructure and API spend at every layer |
-| 2 | **Reliable** | Minimal hallucination, no data invention, deterministic first |
-| 3 | **Scalable** | Plugin architecture, clean interfaces, workflow-as-code |
-| 4 | **Low latency** | Cache aggressively, async scraping, LLM is last resort |
+| Priority | Absolute          | What it means                                                 |
+| -------- | ----------------- | ------------------------------------------------------------- |
+| 1        | **Cost friendly** | Minimise infrastructure and API spend at every layer          |
+| 2        | **Reliable**      | Minimal hallucination, no data invention, deterministic first |
+| 3        | **Scalable**      | Plugin architecture, clean interfaces, workflow-as-code       |
+| 4        | **Low latency**   | Cache aggressively, async scraping, LLM is last resort        |
 
 ---
 
@@ -48,13 +47,13 @@ To respect **Absolute #1** and **Absolute #4**, Propvest uses a tiered ingestion
 
 All scoring is **deterministic math** — LLM never computes scores. Missing signals trigger **Dynamic Re-weighting** (scaling remaining signals to 100%) to avoid unfair penalties.
 
-| Signal | Weight | Source | Notes |
-|--------|--------|--------|-------|
-| Vacancy rate | 25% | SQM Research | Low = rental demand strong |
-| Stock on market | 20% | SQM Research | Low = supply constrained |
-| Population growth | 20% | ABS (bulk CSV) | Filtered via Ingestor |
-| Infrastructure pipeline | 20% | State gov portals, news | LLM parses unstructured source |
-| Relative median vs neighbours | 15% | REA / Domain | Relative value signal |
+| Signal                        | Weight | Source                  | Notes                          |
+| ----------------------------- | ------ | ----------------------- | ------------------------------ |
+| Vacancy rate                  | 25%    | SQM Research            | Low = rental demand strong     |
+| Stock on market               | 20%    | SQM Research            | Low = supply constrained       |
+| Population growth             | 20%    | ABS (bulk CSV)          | Filtered via Ingestor          |
+| Infrastructure pipeline       | 20%    | State gov portals, news | LLM parses unstructured source |
+| Relative median vs neighbours | 15%    | REA / Domain            | Relative value signal          |
 
 ---
 
@@ -112,6 +111,7 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
 **Core rule:** The core only orchestrates. All business logic lives in plugins.
 
 **Three laws:**
+
 1. Every plugin implements a base interface.
 2. Plugins communicate via event bus — never direct imports.
 3. Feature flags in `config.yaml` — disable without deleting code.
@@ -164,14 +164,14 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
 
 ## Infrastructure & Cost (Estimated)
 
-| Layer | Tool | Est. Cost |
-|-------|------|-----------|
-| Database | Supabase | Free / $25 |
-| Orchestration | Windmill (Self-hosted) | Free |
-| Scraping | Crawl4AI + Camofox | Free (Proxy costs vary) |
-| Backend | FastAPI (Railway) | ~$5/mo |
-| LLM | Claude API | <$10/mo |
-| **Total** | | **~$5-15/mo** |
+| Layer         | Tool                   | Est. Cost               |
+| ------------- | ---------------------- | ----------------------- |
+| Database      | Supabase               | Free / $25              |
+| Orchestration | Windmill (Self-hosted) | Free                    |
+| Scraping      | Crawl4AI + Camofox     | Free (Proxy costs vary) |
+| Backend       | FastAPI (Railway)      | ~$5/mo                  |
+| LLM           | Claude API             | <$10/mo                 |
+| **Total**     |                        | **~$5-15/mo**           |
 
 ---
 
@@ -181,6 +181,9 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
 
 ---
 
-*Last updated: Session 3 — Phase 1 build, ABS Ingestor complete*
-*Next: Phase 1 — Windmill local workspace + first Tier 1 scrape (Crawl4AI + Camofox)*
+_Last updated: Session 3 — Phase 1 build, ABS Ingestor complete_
+_Next: Phase 1 — Windmill local workspace + first Tier 1 scrape (Crawl4AI + Camofox)_
+
+```
+
 ```
