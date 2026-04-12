@@ -99,6 +99,34 @@
 - Growth Funnel result: 193 qualifying LGAs → 8,639 suburbs
   - NSW 2816 · QLD 2621 · VIC 1706 · WA 697 · SA 618 · NT 117 · TAS 64
 
+---
+
+## [0.4.0] — 2026-04-12
+
+### Added
+
+- `plugins/scoring/deterministic.py` — deterministic weighted scoring engine
+  - `score_suburb(suburb, config) -> SuburbScorecard` entry point
+  - Normalises each signal value to 0–100 using `scoring_bounds` from `config.yaml`
+  - **Dynamic re-weighting:** if signals are missing, present signal weights scale up
+    proportionally so they always sum to 100% — no suburb penalised for absent data
+  - Returns `SuburbScorecard` with `overall_score`, per-signal `component_scores`, and `is_incomplete` flag
+- `plugins/scoring/__init__.py`
+- `config.yaml`: new `scoring_bounds` block with normalization ranges and direction for all 5 signals
+  - `vacancy_rate`: 0–5%, low is good
+  - `stock_on_market`: 0–10%, low is good
+  - `population_growth`: 0–3%, high is good
+  - `infra_pipeline`: 0–100 (pre-scored by LLM parser), high is good
+  - `relative_median`: −30% to +30%, low is good (undervalued = better entry)
+
+### Notes
+
+- Scoring engine is fully operational but has no input data yet — awaiting scrapers
+- REA anti-bot approach under review: `playwright-stealth` (free) vs Camofox (paid) — decision pending
+- Docker Desktop not yet installed on dev machine — Windmill setup blocked until resolved
+
+---
+
 _Versions follow semantic versioning — major.minor.patch_
 _Major: breaking architecture change_
 _Minor: new feature or plugin added_

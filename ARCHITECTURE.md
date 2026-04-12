@@ -132,10 +132,11 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
       __init__.py
       base_scraper.py     ✓ BUILT — abstract base + log_run() stub
       abs_ingestor.py     ✓ BUILT — Growth Funnel cold filter (8,639 Tier 1 suburbs)
-      rea_camofox.py      ← TODO: Playwright anti-bot (Phase 1 Step 4)
-      sqm/                ← TODO: SQM vacancy + stock scraper
+      rea_scraper.py      ← TODO: Playwright anti-bot (approach TBD: playwright-stealth vs Camofox)
+      sqm/                ← TODO: SQM vacancy + stock scraper (public pages, no account)
     /scoring
-      deterministic.py    ← TODO: Weighted math + Re-weighting logic
+      __init__.py         ✓ BUILT
+      deterministic.py    ✓ BUILT — weighted math + dynamic re-weighting (see Scoring Engine below)
   /data
     /raw
       /abs                ← ABS source files (gitignored)
@@ -146,6 +147,42 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
   /api                    ← TODO: FastAPI endpoints (Phase 2)
   /frontend               ← TODO: Next.js (Phase 2)
 ```
+
+---
+
+## Scoring Engine
+
+**File:** `plugins/scoring/deterministic.py`
+**Entry point:** `score_suburb(suburb: Suburb, config: dict | None) -> SuburbScorecard`
+
+### How it works
+
+1. Reads `scoring_weights` and `scoring_bounds` from `config.yaml`
+2. Indexes `suburb.signals` by name (O(1) lookup)
+3. Normalises each present signal to 0–100 using its configured bounds and direction:
+   - `low_is_good` — lower raw value maps to higher score (vacancy rate, stock on market)
+   - `high_is_good` — higher raw value maps to higher score (population growth, infra pipeline)
+4. **Dynamic re-weighting:** if any signals are absent, the weights of present signals are scaled proportionally so they still sum to 100%. No suburb is penalised for missing data.
+5. Returns `SuburbScorecard` with:
+   - `overall_score` — weighted sum (0–100)
+   - `component_scores` — each signal's weighted contribution to the total
+   - `is_incomplete` — `True` if any configured signal was absent
+
+### Normalization bounds (config.yaml `scoring_bounds`)
+
+| Signal              | Range        | Direction    | Notes                               |
+| ------------------- | ------------ | ------------ | ----------------------------------- |
+| `vacancy_rate`      | 0–5%         | low is good  | SQM Research                        |
+| `stock_on_market`   | 0–10%        | low is good  | SQM Research                        |
+| `population_growth` | 0–3%         | high is good | ABS bulk data                       |
+| `infra_pipeline`    | 0–100        | high is good | Pre-scored by LLM infra parser      |
+| `relative_median`   | −30% to +30% | low is good  | REA/Domain (negative = undervalued) |
+
+> Bounds live in `config.yaml`, not in code. Change bounds there. Run 30-suburb eval set after any change.
+
+### Important constraint
+
+`population_growth` is stored directly on `Suburb.pop_growth_rate` from the ABS ingestor. To include it in scoring, the data pipeline **must** emit a `DataSignal(name='population_growth', value=pop_growth_rate)` into `suburb.signals`. The scoring engine only reads signals — it does not read raw Suburb fields.
 
 ---
 
@@ -181,8 +218,8 @@ All scoring is **deterministic math** — LLM never computes scores. Missing sig
 
 ---
 
-_Last updated: Session 3 — Phase 1 build, ABS Ingestor complete_
-_Next: Phase 1 — Windmill local workspace + first Tier 1 scrape (Crawl4AI + Camofox)_
+_Last updated: Session 4 — Deterministic scoring engine complete_
+_Next: Phase 1 — Docker Desktop install → Windmill setup → REA + SQM scrapers_
 
 ```
 

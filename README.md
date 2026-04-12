@@ -37,7 +37,7 @@ Scoring is fully deterministic — the LLM explains scores, never computes them.
 | Agent runtime | Hermes (Nous Research) |
 | Scraping      | Crawl4AI               |
 | Infra parsing | ScrapeGraphAI          |
-| Orchestration | n8n                    |
+| Orchestration | Windmill (self-hosted) |
 | Database      | Supabase (Postgres)    |
 | Cache         | Redis                  |
 | RAG           | LlamaIndex             |
@@ -81,7 +81,9 @@ Full setup guide coming in Phase 1 completion.
 
 ## Project Status
 
-Currently in **Phase 1 — Foundation.**
+Currently in **Phase 1 — Foundation** (Session 4 of build).
+
+Built so far: ABS population ingestor (8,639 Tier 1 suburbs), Pydantic schemas, deterministic scoring engine with dynamic re-weighting. Next: Windmill orchestration setup, REA + SQM scrapers.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for full phased delivery plan.
 

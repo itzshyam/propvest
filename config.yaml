@@ -65,6 +65,35 @@ token_budgets:
   infra_parse: 600 # pipeline document parsing
 
 # ---
+# SCORING BOUNDS (normalization ranges — change here, not in code)
+# Each signal value is clamped to [min, max] then mapped to 0–100.
+# direction: "low_is_good" inverts the scale (e.g. vacancy: lower = better score)
+# direction: "high_is_good" maps directly (e.g. pop growth: higher = better score)
+# See DECISIONS.md before changing bounds — run 30-suburb eval set after any change.
+# ---
+scoring_bounds:
+  vacancy_rate:
+    min: 0.0 # 0% vacancy  → 100 pts
+    max: 5.0 # 5%+ vacancy → 0 pts
+    direction: low_is_good
+  stock_on_market:
+    min: 0.0 # 0% stock    → 100 pts
+    max: 10.0 # 10%+ stock  → 0 pts
+    direction: low_is_good
+  population_growth:
+    min: 0.0 # 0% growth   → 0 pts
+    max: 3.0 # 3%+ growth  → 100 pts
+    direction: high_is_good
+  infra_pipeline:
+    min: 0.0 # pre-scored 0–100 by LLM infra parser; passed through directly
+    max: 100.0
+    direction: high_is_good
+  relative_median:
+    min: -30.0 # 30% below neighbours → 100 pts (undervalued)
+    max: 30.0 # 30% above neighbours → 0 pts  (overpriced)
+    direction: low_is_good
+
+# ---
 # DATA FILTERS (Growth Funnel thresholds — change here, not in code)
 # ---
 data_filters:

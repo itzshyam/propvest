@@ -250,3 +250,37 @@ Each decision follows this structure:
 **Rationale:** Preserving the logging contract from day one means the Supabase swap is a one-line body replacement in `log_run()`. File-based log is sufficient for Phase 1 debugging.
 **Trade-offs:** Logs are local only. Hermes cannot read them until Supabase is wired.
 **Revisit when:** Supabase is connected (Phase 1 Step 3 — Windmill setup).
+
+---
+
+## Session 4 Decisions
+
+### Scoring Normalization — Bounds in config.yaml
+
+**Decision:** Signal normalization ranges (min/max/direction) live in `config.yaml` under `scoring_bounds`, not hardcoded in the scoring engine.
+
+**Options considered:** Hardcode bounds in `deterministic.py`; derive bounds dynamically from data distribution.
+
+**Rationale:** Bounds are tuning parameters, not logic. Keeping them in config.yaml means Shyam can adjust thresholds (e.g., tighten the vacancy rate ceiling from 5% to 3%) without touching Python. Consistent with how scoring weights are managed. Dynamic bounds from data would introduce non-determinism — violates Absolute #2.
+
+**Trade-offs:** Bounds need manual calibration against real data. Initial values are reasonable estimates; the 30-suburb eval set will validate them.
+
+**Revisit when:** Real scraper data shows signal distributions don't fit current ranges (e.g., if SQM vacancy data is regularly above 5% in target markets).
+
+---
+
+### REA Anti-Bot Approach — Decision Pending
+
+**Decision:** TBD — Shyam to decide between `playwright-stealth` (free, open source) and Camofox (paid residential proxy + fingerprint service).
+
+**Options considered:**
+
+- `playwright-stealth` — open source Playwright fingerprint patching; free; adequate for low-frequency weekly scraping (~400 req/day); ~80% reliable estimate
+- Camofox — residential proxy + full browser fingerprint spoofing; ~$50–150/mo; defeats Akamai/Cloudflare reliably
+- Standard datacenter proxy + requests — blocked quickly by REA's bot detection (fingerprint + JS checks fail)
+
+**Rationale for starting with playwright-stealth:** Absolute #1 is cost. Weekly Tier 1 cadence is light enough that stealth mode may hold up without paying for Camofox. Upgrade path is clear if it starts failing.
+
+**Trade-offs:** playwright-stealth may break under REA's bot detection at scale or after a site update. Camofox is more reliable but adds ongoing cost.
+
+**Revisit when:** Shyam confirms approach. Scraper plugin name will be `rea_scraper.py` regardless of backend chosen.
