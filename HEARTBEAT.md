@@ -26,8 +26,10 @@
   - If yes → alert user with suburb name, old score, new score, and which signal changed
 - [ ] Check `/knowledge-drop` for any unprocessed files
   - If new file found → convert to Markdown → chunk → index into LlamaIndex → mark as processed
-- [ ] Check Domain scraper block rate
-  - If >20% of Domain requests return non-200 or empty **NEXT_DATA** → alert user immediately
+- [ ] Check Domain scraper **true** block rate (WAF blocks only — 403/429 responses)
+  - If >20% of Domain requests return 403 or 429 → alert user immediately
+  - Do NOT count "no house data" responses (200 OK, empty suburb) as blocks — these are
+    legitimate for rural hamlets and small localities with no house sales on Domain
   - Do not auto-retry more than 2x — reduces Akamai detection risk
 
 ---
@@ -36,10 +38,12 @@
 
 - [ ] Check Domain and SQM for structure changes
   - Domain: verify `__NEXT_DATA__` JSON still contains `propertyCategories` and `statistics` keys
-  - SQM: verify scraper returns expected vacancy + stock fields
+    inside `__APOLLO_STATE__` (keys: `LocationProfile:*` and `Suburb:*`)
+  - SQM vacancy: verify `var data = [{year,month,listings,properties,vr},...]` still present
+  - SQM listings: verify `var data = [{year,month,r30,r60,r90,r180,r180p},...]` still present
+    at `/property/total-property-listings?postcode={pc}&t=1`
   - If either returns empty or malformed → flag for skill update, disable plugin
 - [ ] Check `api_cost_log` — alert if daily Claude API spend exceeds $1.00
-- [ ] Verify Redis cache is healthy and TTLs are set correctly
 - [ ] Check curl-cffi Domain scraper ran within expected request window (50-80/day)
   - If over 80 requests in a day → alert, review rate limiting config
 
@@ -81,26 +85,30 @@ alerts:
 
 Hermes should self-improve these skills based on outcomes:
 
-| Skill                      | Trigger for improvement                            |
-| -------------------------- | -------------------------------------------------- |
-| `scrape_domain.md`         | Block rate >20% or **NEXT_DATA** structure changes |
-| `scrape_sqm.md`            | Scrape returns <50% expected rows                  |
-| `scrape_valuer_general.md` | Parse returns unexpected format                    |
-| `parse_infra_pipeline.md`  | LLM extraction confidence <70%                     |
-| `score_suburb.md`          | Eval set divergence >15 points                     |
-| `tier_classifier.md`       | >30% of suburbs reclassified after first DOM data  |
+| Skill                      | Trigger for improvement                                 |
+| -------------------------- | ------------------------------------------------------- |
+| `scrape_domain.md`         | True block rate >20% or **NEXT_DATA** structure changes |
+| `scrape_sqm.md`            | Scrape returns <50% expected rows or URL/format changes |
+| `scrape_valuer_general.md` | Parse returns unexpected format                         |
+| `parse_infra_pipeline.md`  | LLM extraction confidence <70%                          |
+| `score_suburb.md`          | Eval set divergence >15 points                          |
+| `tier_classifier.md`       | >30% of suburbs reclassified after first DOM data       |
 
 ---
 
-## Known Data File Locations (as of Session 5)
+## Known Data File Locations (as of Session 6)
 
-| File                              | Purpose                                        | Regenerate with                                                                        |
-| --------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `data/raw/abs/erp_lga.csv`        | Cached ABS ERP parse (546 LGAs)                | Delete + re-run abs_ingestor.py                                                        |
-| `data/raw/abs/ssc_to_lga.csv`     | Cached SAL→LGA concordance (16,630 rows)       | Delete + re-run abs_ingestor.py                                                        |
-| `data/raw/tier1_candidates.json`  | 8,639 Tier 1 suburbs with ABS growth rates     | `python -m plugins.scrapers.abs_ingestor`                                              |
-| `data/raw/geography_trinity.json` | 8,639 suburbs with scrape tiers + domain slugs | `python -m plugins.scrapers.geography_builder` then `tier_classifier --mode bootstrap` |
-| `data/raw/scrape_log.json`        | Run log (all scraper runs)                     | Append-only, do not delete                                                             |
+| File                                       | Purpose                                       | Regenerate with                                                                        |
+| ------------------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `data/raw/abs/erp_lga.csv`                 | Cached ABS ERP parse (546 LGAs)               | Delete + re-run `abs_ingestor.py`                                                      |
+| `data/raw/abs/ssc_to_lga.csv`              | Cached SAL→LGA concordance (16,630 rows)      | Delete + re-run `abs_ingestor.py`                                                      |
+| `data/raw/abs/australian_postcodes.csv`    | data.gov.au postcode lookup (18,559 rows)     | Auto-downloaded by `geography_builder` if missing                                      |
+| `data/raw/abs/multi_postcode_suburbs.json` | 704 suburbs mapped to multiple postcodes      | Re-run `geography_builder`                                                             |
+| `data/raw/tier1_candidates.json`           | 8,639 Tier 1 suburbs with ABS growth rates    | `python -m plugins.scrapers.abs_ingestor`                                              |
+| `data/raw/geography_trinity.json`          | 8,639 suburbs with postcodes + tiers + slugs  | `python -m plugins.scrapers.geography_builder` then `tier_classifier --mode bootstrap` |
+| `data/raw/domain_signals.json`             | Domain scrape results keyed by slug           | `python -m plugins.scrapers.domain_next_data --state QLD --batch 50`                   |
+| `data/raw/sqm_signals.json`                | SQM vacancy + stock signals keyed by postcode | `python -m plugins.scrapers.sqm_scraper --batch 50`                                    |
+| `data/raw/scrape_log.json`                 | Run log (all scraper runs) — append-only      | Do not delete                                                                          |
 
 Manual source files (not regeneratable automatically):
 
@@ -111,5 +119,16 @@ Manual source files (not regeneratable automatically):
 
 ---
 
-_Last updated: Session 5_
+## Known Issues / Gotchas (Session 6)
+
+- **SQM `graph_listings.php` is 404** as of April 2026. Correct URL: `/property/total-property-listings`
+- **Domain "block rate" false positive**: small rural hamlets return 200 OK with no house data —
+  this is NOT a WAF block. Only count 403/429 responses as true blocks.
+- **ACT has 0 qualifying Tier 1 suburbs** — LGA growth filter excludes ACT LGAs. Investigate separately if ACT coverage needed.
+- **Supabase tables do not exist yet** — `001_create_core_tables.sql` not yet run. All Supabase writes fall back to file log silently.
+- **10 suburbs have no postcode** — national parks and territories (Blue Mountains NP, Moreton Bay area, etc.). These will never have Domain data and are data_thin by definition.
+
+---
+
+_Last updated: Session 6_
 _Hermes workspace: C:\Users\itzsh\Documents\Projects\Propvest_

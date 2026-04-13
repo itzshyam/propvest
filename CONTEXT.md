@@ -7,13 +7,13 @@
 
 ## Investor Profile
 
-| Attribute | Detail |
-|---|---|
-| Strategy | Buy and hold — capital growth focus |
-| Geography | All of Australia (~15,000 suburbs) |
-| Asset class | Standalone residential houses only |
-| Price ceiling | $800,000 suburb median (standalone house) |
-| Horizon | Long term (7-10+ years) |
+| Attribute     | Detail                                     |
+| ------------- | ------------------------------------------ |
+| Strategy      | Buy and hold — capital growth focus        |
+| Geography     | All of Australia (~15,000 suburbs)         |
+| Asset class   | Standalone residential houses only         |
+| Price ceiling | $800,000 suburb median (standalone house)  |
+| Horizon       | Long term (7-10+ years)                    |
 | Risk appetite | Moderate — growth focused, not speculative |
 
 ---
@@ -47,12 +47,12 @@ A high-scoring suburb for this investor has:
 
 ```yaml
 scoring_weights:
-  vacancy_rate: 0.25        # strongest demand signal
-  stock_on_market: 0.20     # supply constraint signal
-  population_growth: 0.20   # long term demand driver
-  infra_pipeline: 0.20      # forward-looking alpha signal
-  sales_volume_momentum: 0.10  # Q-on-Q house sales trend
-  relative_median: 0.05     # relative value entry point
+  vacancy_rate: 0.25 # strongest demand signal
+  stock_on_market: 0.20 # supply constraint signal
+  population_growth: 0.20 # long term demand driver
+  infra_pipeline: 0.20 # forward-looking alpha signal
+  sales_volume_momentum: 0.10 # Q-on-Q house sales trend
+  relative_median: 0.05 # relative value entry point
 ```
 
 > See DECISIONS.md → Scoring Weights History before changing any value.
@@ -101,5 +101,5 @@ These trigger alerts on suburb cards but do not affect the score directly:
 
 ---
 
-_Last updated: Session 4_
+_Last updated: Session 6_
 _Weights version: v1.1 — see DECISIONS.md for change history_
