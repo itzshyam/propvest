@@ -21,6 +21,7 @@
 ## [0.1.0] — 2026-04-11
 
 ### Added
+
 - Project scaffolded — full folder structure created
 - `agents.md` — AI tool behaviour rules
 - `PROJECT.md` — local project index (gitignored)
@@ -33,6 +34,7 @@
 - `CHANGELOG.md` — this file
 
 ### Notes
+
 - Session 1 complete — whiteboard + architecture locked, scaffold in progress
 - No code written yet — foundation files only
 - GitHub repo not yet created
@@ -41,14 +43,18 @@
 ---
 
 ## [0.2.0] — 2026-04-11
+
 ### Added
+
 - Pivoted Orchestration from n8n to Windmill.
 - Defined Tiered Scraping Funnel (Tier 1 vs Tier 2).
 - Added Pydantic Schema layer for data digestibility.
 - Integrated Camofox for enhanced anti-bot scraping.
 
 ## [0.2.1] — 2026-04-11
+
 ### Added
+
 - Remote GitHub repository linked.
 - Multi-branch strategy initialized (`main`, `dev`).
 - Successful first push to origin.
@@ -56,7 +62,9 @@
 ---
 
 ## [0.3.0] — 2026-04-11
+
 ### Added
+
 - Python venv (`.venv`, Python 3.11.8) + `requirements.txt`
   - pydantic 2.12.5, pandas 2.3.3, openpyxl, requests, pyyaml, supabase 2.28.3
 - `core/__init__.py`, `core/schemas/__init__.py` — package structure
@@ -76,19 +84,22 @@
 - `data/raw/scrape_log.json` — first run logged
 
 ### Changed
+
 - `config.yaml`: `lga_min_growth_pct` set to `0.5` (down from initial `1.5` — 83 LGAs was too restrictive)
 
 ### Fixed
+
 - `core/schemas/suburb.py`: corrected import `from .signal` → `from .signals`
 - `abs_ingestor.py`: LGA code type mismatch — ERP cache returns int codes, SAL concordance uses strings; both now stringified before comparison
 
 ### Notes
+
 - ABS Data API (`api.data.abs.gov.au`) is blocked from this machine — ingestor falls back to manually placed Excel file cleanly
 - ABS renamed suburb geography from SSC to SAL; ingestor detects both automatically
 - Growth Funnel result: 193 qualifying LGAs → 8,639 suburbs
   - NSW 2816 · QLD 2621 · VIC 1706 · WA 697 · SA 618 · NT 117 · TAS 64
 
-*Versions follow semantic versioning — major.minor.patch*
-*Major: breaking architecture change*
-*Minor: new feature or plugin added*
-*Patch: bug fix, config tweak, or doc update*
+_Versions follow semantic versioning — major.minor.patch_
+_Major: breaking architecture change_
+_Minor: new feature or plugin added_
+_Patch: bug fix, config tweak, or doc update_

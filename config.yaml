@@ -7,83 +7,92 @@
 # SCORING MODEL
 # ---
 scoring_weights:
-  vacancy_rate:      0.25   # strongest demand signal
-  stock_on_market:   0.20   # supply constraint signal
-  population_growth: 0.20   # long term demand driver
-  infra_pipeline:    0.20   # forward-looking alpha signal
-  relative_median:   0.15   # relative value entry point
+  vacancy_rate: 0.25 # strongest demand signal
+  stock_on_market: 0.20 # supply constraint signal
+  population_growth: 0.20 # long term demand driver
+  infra_pipeline: 0.20 # forward-looking alpha signal
+  sales_volume_momentum: 0.10 # Q-on-Q house sales trend
+  relative_median: 0.05 # relative value entry point
 
-scoring_model_version: "v1.0"  # increment when weights change, log in DECISIONS.md
+scoring_model_version: "v1.1" # increment when weights change, log in DECISIONS.md
 
 # ---
 # PLUGINS
 # ---
 plugins:
-
   # Scrapers
   scrapers:
-    rea:        enabled     # REA suburb profiles + median prices
-    sqm:        enabled     # vacancy rates + stock on market
-    abs:        enabled     # population data (bulk CSV download)
-    domain:     disabled    # future — enable if REA becomes unreliable
-    corelogic:  disabled    # future — enable if paid access acquired
+    abs: enabled # population data (bulk CSV, ABS ASGS concordances)
+    geography: enabled # Geography Trinity builder (SAL ↔ postcode ↔ SA2 ↔ LGA)
+    domain: enabled # Domain __NEXT_DATA__ curl-cffi (QLD/WA/NT/TAS/ACT)
+    sqm: enabled # vacancy rates + stock on market (national, curl-cffi)
+    nsw_valuer_general: enabled # NSW bulk .DAT weekly
+    vic_valuer_general: enabled # VIC Data.Vic VPSR quarterly CSV
+    sa_valuer_general: enabled # SA VG quarterly Excel
+    corelogic: disabled # future — enable if paid access acquired
 
   # Signals
   signals:
-    vacancy_rate:      enabled
-    stock_on_market:   enabled
+    vacancy_rate: enabled
+    stock_on_market: enabled
     population_growth: enabled
-    infra_pipeline:    enabled
-    relative_median:   enabled
-    price_trajectory:  disabled   # stored but excluded from v1 scoring
+    infra_pipeline: enabled
+    sales_volume_momentum: enabled
+    relative_median: enabled
+    price_trajectory: disabled # stored but excluded from v1 scoring
 
   # RAG layer
-  rag: llamaindex             # swap to: langchain (zero code changes)
+  rag: llamaindex # swap to: langchain (zero code changes)
 
   # LLM
   llm:
-    primary:  claude
-    fallback: openai          # only used if claude unavailable
+    primary: claude
+    fallback: openai # only used if claude unavailable
 
   # Cache
   cache:
     provider: redis
-    ttl_hours: 48             # scorecard cache duration
+    ttl_hours: 48 # scorecard cache duration
 
   # Outputs
   outputs:
-    supabase:    enabled
-    csv_export:  disabled     # enable for data export feature
-    alerts:      enabled
+    supabase: enabled
+    csv_export: disabled # enable for data export feature
+    alerts: enabled
 
 # ---
 # TOKEN EFFICIENCY
 # ---
 token_budgets:
-  scoring_summary: 300    # short synthesis
-  deep_dive:       800    # full suburb analysis
-  chat_response:   500    # conversational answer
-  infra_parse:     600    # pipeline document parsing
+  scoring_summary: 300 # short synthesis
+  deep_dive: 800 # full suburb analysis
+  chat_response: 500 # conversational answer
+  infra_parse: 600 # pipeline document parsing
 
 # ---
 # DATA FILTERS (Growth Funnel thresholds — change here, not in code)
 # ---
 data_filters:
-  lga_min_population: 20000   # LGAs below this are excluded from Tier 1
-  lga_min_growth_pct: 0.5     # Annual ERP growth % required to qualify
+  lga_min_population: 20000 # LGAs below this are excluded from Tier 1
+  lga_min_growth_pct: 0.5 # Annual ERP growth % required to qualify
 
 # ---
 # SCRAPING
 # ---
 scraping:
   async: true
-  max_concurrent: 5         # parallel suburb scrapes
+  max_concurrent: 5 # parallel suburb scrapes
   retry_attempts: 3
   retry_delay_seconds: 10
   cadence:
-    rea:  weekly
-    sqm:  weekly
-    abs:  monthly           # ABS data changes slowly
+    domain_hot: weekly # Hot tier suburbs (DOM <30 days)
+    domain_warm: monthly # Warm tier suburbs (DOM 30-60 days)
+    domain_cold: quarterly # Cold tier suburbs (DOM >60 days)
+    sqm: weekly # vacancy rate + stock on market
+    nsw_valuer_general: weekly
+    vic_valuer_general: quarterly
+    sa_valuer_general: quarterly
+    abs: yearly # ABS ERP data — annual release
 
 # ---
 # HERMES
@@ -91,8 +100,8 @@ scraping:
 hermes:
   workspace: "C:\\Users\\itzsh\\Documents\\Projects\\Propvest"
   heartbeat_interval_minutes: 30
-  alert_on_score_shift: 10  # points — alert if suburb score shifts this much
-  eval_divergence_threshold: 15  # points — alert if eval set diverges this much
+  alert_on_score_shift: 10 # points — alert if suburb score shifts this much
+  eval_divergence_threshold: 15 # points — alert if eval set diverges this much
 
 # ---
 # KNOWLEDGE DROP

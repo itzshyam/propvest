@@ -8,6 +8,7 @@
 ## Format
 
 Each decision follows this structure:
+
 - **Decision:** what was decided
 - **Options considered:** what else was on the table
 - **Rationale:** why this choice was made
@@ -25,6 +26,7 @@ Each decision follows this structure:
 **Decision:** Use Hermes (Nous Research) as the agent runtime and scheduler.
 
 **Options considered:**
+
 - OpenClaw — mature ecosystem, strong plugin breadth
 - Custom agent loop (LangGraph / LangChain)
 
@@ -38,18 +40,21 @@ Each decision follows this structure:
 
 ### Scraping — Crawl4AI
 
-**Decision:** Use Crawl4AI as the primary scraper for REA, Domain, and SQM.
+**Decision:** Use Crawl4AI as the primary scraper for SQM Research and infrastructure sources.
 
 **Options considered:**
+
 - Scrapy — battle-tested but poor JS support
 - Playwright alone — requires manual wiring
 - Firecrawl — purpose-built for RAG but paid at scale
 
-**Rationale:** 58k+ GitHub stars, async-first, built-in 3-tier anti-bot detection with proxy escalation, Shadow DOM flattening, and consent popup removal. Outputs clean LLM-ready Markdown directly — no conversion step before RAG ingestion.
+**Rationale:** 58k+ GitHub stars, async-first, built-in 3-tier anti-bot detection with proxy escalation, Shadow DOM flattening, and consent popup removal. Outputs clean LLM-ready Markdown directly.
 
 **Trade-offs:** Self-hosted means we manage proxies and retries ourselves at scale.
 
-**Revisit when:** REA/Domain bot detection defeats Crawl4AI consistently, or Firecrawl drops to affordable pricing.
+**Revisit when:** SQM bot detection defeats Crawl4AI consistently.
+
+**Note (Session 4):** Crawl4AI is no longer used for Domain. curl-cffi handles Domain scraping. See Session 4 decisions below.
 
 ---
 
@@ -58,6 +63,7 @@ Each decision follows this structure:
 **Decision:** Use ScrapeGraphAI for parsing unstructured infrastructure sources (state gov portals, planning PDFs, news).
 
 **Options considered:**
+
 - Custom Playwright + regex — brittle, breaks constantly
 - Crawl4AI with LLM extraction — possible but ScrapeGraphAI is purpose-built
 
@@ -74,31 +80,25 @@ Each decision follows this structure:
 **Decision:** Use LlamaIndex as the RAG layer for suburb retrieval and knowledge drop ingestion.
 
 **Options considered:**
+
 - LangChain — broader but more boilerplate
 - Custom vector store — too much overhead for v1
 
-**Rationale:** Purpose-built for RAG. Less boilerplate than LangChain for index → retrieve → query workflows. Swappable via config.yaml if needed. Plugin interface (base_rag.py) means LangChain can replace it with zero code changes elsewhere.
+**Rationale:** Purpose-built for RAG. Less boilerplate than LangChain for index → retrieve → query workflows. Swappable via config.yaml if needed.
 
-**Trade-offs:** Less flexibility than LangChain for non-RAG use cases. Smaller ecosystem.
+**Trade-offs:** Less flexibility than LangChain for non-RAG use cases.
 
 **Revisit when:** We need agent orchestration features that LangChain/LangGraph handles better.
 
 ---
 
-### Orchestration — n8n
+### Orchestration — Windmill
 
-**Decision:** Use n8n for workflow orchestration, scrape job scheduling, and alerting.
+**Decision:** Use Windmill instead of n8n for workflow orchestration.
 
-**Options considered:**
-- GitHub Actions cron — free but limited, no visual debugging
-- Prefect / Airflow — overkill for current scale
-- Custom scheduler — unnecessary build
+**Rationale:** Windmill supports workflow-as-code using typed Python with Pydantic validation. Ensures digestible data rigor.
 
-**Rationale:** Self-hostable, free, visual workflow builder, native Hermes integration, Telegram/email alerting built in. Triggers scrape jobs, routes data to Supabase, and alerts on score changes without custom code.
-
-**Trade-offs:** Another self-hosted service to maintain.
-
-**Revisit when:** n8n overhead outweighs benefit, or GitHub Actions becomes sufficient.
+**Revisit when:** System needs more visual, non-technical no-code logic.
 
 ---
 
@@ -106,11 +106,7 @@ Each decision follows this structure:
 
 **Decision:** Use Claude API as primary LLM, connected via MCP tools. OpenAI as fallback via config only.
 
-**Options considered:**
-- OpenAI GPT-4o — strong but Claude better for structured output + long context
-- Local models via Ollama — free but quality gap for reasoning tasks
-
-**Rationale:** Claude's structured output mode enforces JSON schema — critical for our reliability absolute. MCP tool protocol means adding new data sources = adding a new tool, not rewiring. Swappable via config.yaml.
+**Rationale:** Claude's structured output mode enforces JSON schema — critical for reliability absolute. MCP tool protocol means adding new data sources = adding a new tool, not rewiring.
 
 **Trade-offs:** API cost per call. Dependent on Anthropic availability.
 
@@ -121,10 +117,6 @@ Each decision follows this structure:
 ### Scoring — Deterministic Only
 
 **Decision:** Suburb scores are computed by deterministic weighted math only. LLM never computes a score.
-
-**Options considered:**
-- LLM-assisted scoring — flexible but hallucination risk
-- ML model — future consideration, not v1
 
 **Rationale:** Reliability is Absolute #2. An LLM inventing suburb scores with false confidence would undermine the entire product. Deterministic math is auditable, versioned, and reproducible. LLM role is explain and converse only.
 
@@ -138,11 +130,7 @@ Each decision follows this structure:
 
 **Decision:** All business logic lives in plugins. Core only orchestrates. Plugins communicate via event bus.
 
-**Options considered:**
-- Monolithic — faster to start, harder to scale
-- Microservices — too complex for current stage
-
-**Rationale:** Scalable absolute. Swap any component (RAG, LLM, scraper, scorer) via config.yaml with zero code changes. Feature flags mean broken components can be disabled without deleting code. Plugin interfaces mean new data sources slot in cleanly.
+**Rationale:** Scalable absolute. Swap any component via config.yaml with zero code changes. Feature flags mean broken components can be disabled without deleting code.
 
 **Trade-offs:** More upfront structure. Event bus adds indirection.
 
@@ -154,14 +142,7 @@ Each decision follows this structure:
 
 **Decision:** All project files, skill files, knowledge drop content stored as Markdown.
 
-**Options considered:**
-- JSON — machine readable but not human or agent friendly
-- Plain text — no structure
-- Word/PDF — not git-trackable or token efficient
-
-**Rationale:** Markdown is simultaneously readable by humans, LLMs, and agents. LLMs were trained on vast amounts of it. Token efficient. Git-trackable line by line. LlamaIndex chunks it cleanly for RAG.
-
-**Trade-offs:** None significant for this use case.
+**Rationale:** Markdown is simultaneously readable by humans, LLMs, and agents. Token efficient. Git-trackable line by line. LlamaIndex chunks it cleanly for RAG.
 
 ---
 
@@ -169,66 +150,242 @@ Each decision follows this structure:
 
 **Decision:** agents.md (public) tells all AI tools to read PROJECT.md (gitignored) first every session.
 
-**Options considered:**
-- Paste context manually each session — tedious and error-prone
-- Single context file — mixes public and private
-
-**Rationale:** PROJECT.md stores local paths and private context without polluting the public repo. agents.md is the universal entry point all tools discover by convention. Together they give every tool full project context from session start with no manual steps.
-
-**Trade-offs:** PROJECT.md must be manually updated when local paths change.
+**Rationale:** PROJECT.md stores local paths and private context without polluting the public repo. agents.md is the universal entry point all tools discover by convention.
 
 ---
 
-## Scoring Weights History
-
-| Version | Date | vacancy | stock | population | infra | relative_median | Notes |
-|---------|------|---------|-------|------------|-------|-----------------|-------|
-| v1.0 | Session 1 | 0.25 | 0.20 | 0.20 | 0.20 | 0.15 | Initial weights — validate against eval set before changing |
-
 ## Session 2 Decisions
 
-### Orchestration — Windmill.dev
-**Decision:** Use Windmill instead of n8n.
-**Rationale:** Windmill supports "Workflow-as-code" using typed Python. This allows us to use Pydantic schemas to ensure the "digestible data" requirement is met with high engineering rigor.
-**Revisit when:** System needs more visual, non-technical "no-code" logic.
-
 ### Data Funnel — Tiered Strategy
+
 **Decision:** Filter 15,000 suburbs down to Tier 1 candidates based on LGA metrics (pop > 20k, growth > 0.5%).
-**Rationale:** Reduces bot-detection risk on REA/Domain by ~80% and focuses compute on high-alpha markets. Initial threshold of 1.5% produced only 83 LGAs — too restrictive for national coverage. Lowered to 0.5% → 193 LGAs → 8,639 suburbs, which better represents growth markets across all states.
-**Revisit when:** A user explicitly requests data for a "Tier 2" suburb (triggers on-demand scrape).
 
-### Agent Logic — Hermes Profiles
-**Decision:** Use a single Hermes brain with three specific profiles: Coordinator (Routing), Researcher (Skills), and Auditor (Veto/Review).
-**Rationale:** Avoids "Agent Sprawl" and multi-agent latency while providing high-quality review for the Top 10% suburbs.
+**Rationale:** Reduces bot-detection risk and focuses compute on high-alpha markets. Initial threshold of 1.5% produced only 83 LGAs — too restrictive. Lowered to 0.5% → 193 LGAs → 8,639 suburbs.
 
-### Version Control — Branching Strategy
-**Decision:** Use a `main` and `dev` branch structure.
-**Rationale:** Standard practice to protect `main` for stable releases while using `dev` for active feature work and agent testing.
-**Trade-offs:** Requires manual merges/PRs, but provides a safety buffer for agent-generated code.
-
-> Always run 30-suburb eval set before changing weights. Log changes here with rationale.
+**Revisit when:** A user explicitly requests data for a Tier 2 suburb (triggers on-demand scrape).
 
 ---
 
 ## Session 3 Decisions
 
-### Growth Funnel Threshold — 1.5% → 0.5%
-**Decision:** Lower `lga_min_growth_pct` in `config.yaml` from 1.5% to 0.5%.
-**Options considered:** Keep 1.5% (83 LGAs, ~900 suburbs — too narrow); lower to 0.5% (193 LGAs, 8,639 suburbs); lower to 0% (all LGAs with pop > 20k — too broad, defeats funnel purpose).
-**Rationale:** 83 LGAs at 1.5% excluded many legitimate growth markets, particularly regional QLD and WA where growth is solid but below the metro rate. 0.5% captures sustained positive growth without including flat or declining markets.
-**Trade-offs:** More scrape volume. Accepted — scraping is async and tiered.
-**Revisit when:** Scrape costs or bot-detection pressure increases significantly.
+### Growth Funnel Threshold — 0.5%
+
+**Decision:** `lga_min_growth_pct` set to 0.5% in config.yaml → 193 LGAs → 8,639 Tier 1 suburbs.
 
 ### ABS Data Source — SAL replaces SSC
-**Decision:** ASGS suburb concordance now uses SAL (Suburb and Locality) codes, not SSC (State Suburb Codes).
-**Options considered:** N/A — ABS made this change in their 2021 ASGS edition. Not a design choice.
-**Rationale:** ABS renamed the geographic structure. `abs_ingestor.py` detects both naming conventions automatically (`SAL_CODE_2021`, `SSC_CODE_2021`) so future ABS format changes are handled without code changes.
-**Trade-offs:** None.
-**Revisit when:** ABS releases a new ASGS edition (next expected ~2026).
+
+**Decision:** ASGS suburb concordance uses SAL (Suburb and Locality) codes, not SSC. abs_ingestor.py detects both naming conventions automatically.
 
 ### scrape_log — File-based Until Supabase Is Wired
-**Decision:** `base_scraper.log_run()` writes to `data/raw/scrape_log.json` rather than Supabase for now.
-**Options considered:** Skip logging until DB is ready; write to Supabase immediately.
-**Rationale:** Preserving the logging contract from day one means the Supabase swap is a one-line body replacement in `log_run()`. File-based log is sufficient for Phase 1 debugging.
-**Trade-offs:** Logs are local only. Hermes cannot read them until Supabase is wired.
-**Revisit when:** Supabase is connected (Phase 1 Step 3 — Windmill setup).
+
+**Decision:** base_scraper.log_run() writes to data/raw/scrape_log.json rather than Supabase for now.
+
+---
+
+## Session 4 Decisions
+
+---
+
+### Domain Scraping — curl-cffi + **NEXT_DATA**
+
+**Decision:** Use curl-cffi with TLS impersonation to scrape Domain suburb profile pages. Extract data from the `__NEXT_DATA__` JSON block embedded in the page source.
+
+**Options considered:**
+
+- Crawl4AI + Camoufox — Camoufox confirmed degraded in 2026 (year-long maintenance gap, experimental only)
+- Paid scraping APIs (ScraperAPI, Zyte) — $50-100/mo, violates Absolute #1
+- Plain requests — fails Akamai TLS fingerprint check immediately
+
+**Rationale:** Akamai's primary detection vector in 2026 is JA3/JA4 TLS fingerprinting. curl-cffi impersonates real Chrome browser TLS handshakes at the library level — free, lightweight, no full browser required. `__NEXT_DATA__` is a structured JSON block already embedded in the page source, confirmed accessible without authentication on Domain suburb profile pages (verified manually April 2026). Targeting JSON directly avoids brittle CSS selector maintenance.
+
+**Known risk:** curl-cffi addresses TLS fingerprinting but not behavioural analysis. Slow drip (50-80 requests/day) mitigates behavioural detection. Not bulletproof — monitor for blocks.
+
+**Trade-offs:** If Domain changes their Next.js rendering approach, **NEXT_DATA** may move or disappear. Low probability given it's core to their frontend architecture.
+
+**Revisit when:** Block rate exceeds 20% of requests, or Domain migrates away from Next.js.
+
+---
+
+### Domain Scraping — States Covered
+
+**Decision:** Use Domain **NEXT_DATA** scraping ONLY for QLD, WA, NT, TAS, and ACT. Not for NSW, VIC, SA.
+
+**Rationale:** NSW, VIC, and SA have free bulk Valuer General data — more reliable, no scraping risk, quarterly/weekly cadence. Domain scraping is the fallback for states with no equivalent bulk source.
+
+**State source map:**
+
+| State    | Source                | Method                      |
+| -------- | --------------------- | --------------------------- |
+| NSW      | NSW Valuer General    | Bulk .DAT download          |
+| VIC      | Data.Vic VPSR         | Quarterly CSV               |
+| SA       | SA Valuer General     | Quarterly Excel             |
+| QLD      | Domain suburb profile | curl-cffi **NEXT_DATA**     |
+| WA       | Domain suburb profile | curl-cffi **NEXT_DATA**     |
+| TAS      | Domain suburb profile | curl-cffi **NEXT_DATA**     |
+| NT       | Domain suburb profile | curl-cffi **NEXT_DATA**     |
+| ACT      | Domain suburb profile | curl-cffi **NEXT_DATA**     |
+| National | SQM Research          | curl-cffi (vacancy + stock) |
+
+---
+
+### PEXA — Ruled Out
+
+**Decision:** Do not use PEXA Postcode Insights as a data source.
+
+**Rationale:** Manual verification confirmed PEXA has no readily accessible structured data tool. Interactive tool does not expose scrapable data or API endpoints.
+
+---
+
+### Property Filter — Standalone Houses Only
+
+**Decision:** Propvest scores standalone houses only. Units and townhouses are excluded from all scoring and signal computation.
+
+**Rationale:** Investor profile (buy and hold, capital growth) is focused on standalone residential. Units and townhouses have fundamentally different supply dynamics and growth profiles.
+
+**Implementation:** Filter Domain **NEXT_DATA** `propertyCategories` to `propertyCategory: "House"` only. Valuer General bulk data filtered to house sales only.
+
+---
+
+### Price Filter — Suburb Median ≤ $800k
+
+**Decision:** Only score suburbs where the standalone house median is ≤ $800,000.
+
+**Rationale:** Investor's maximum purchase price is $800k. Suburbs above this median have limited entry-level stock within budget. Applied post-scrape on first pass, then determines ongoing scrape eligibility.
+
+**Trade-offs:** First pass must scrape all tier 1 suburbs in QLD/WA/NT/TAS before filter can be applied. Ongoing scrape list reduces significantly after first pass.
+
+---
+
+### Minimum Sales Volume — 12 House Sales Per Year
+
+**Decision:** A suburb requires a minimum of 12 standalone house sales in the trailing 12 months to be scored. Below this threshold the suburb is flagged as `data_thin` and excluded from scoring.
+
+**Rationale:** Below 12 sales, median price and DOM figures are statistically unreliable. A single outlier sale can move the median by 10-15%. Scoring unreliable data would undermine Absolute #2 (Reliable).
+
+**Implementation:** Check `numberSold` in Domain **NEXT_DATA** `propertyCategories` filtered to `propertyCategory: "House"`. Flag as `data_thin: true` in suburb record. Reassess quarterly.
+
+**Revisit when:** Never change this threshold without running eval set first.
+
+---
+
+### Scrape Frequency — ABS Growth Rate Bootstrap
+
+**Decision:** Classify QLD/WA/NT/TAS suburbs into scrape tiers using ABS population growth rate as bootstrap classifier until real DOM data is available.
+
+| Tier | ABS Growth Rate       | Scrape Frequency |
+| ---- | --------------------- | ---------------- |
+| Hot  | >2%                   | Weekly           |
+| Warm | 0.5-2%                | Monthly          |
+| Cold | <0.5% (passed filter) | Quarterly        |
+
+**Rationale:** ~80% correlation between high population growth and high housing turnover is sufficient for a bootstrap classifier. Edge cases (mining towns, new estates) self-correct after first real DOM data comes in from scraping. ABS growth data already exists in tier1_candidates.json — no additional data fetch required.
+
+**Reclassification:** After first full scrape pass, reclassify tiers based on actual `daysOnMarket` from Domain:
+
+- DOM <30 days → Hot
+- DOM 30-60 days → Warm
+- DOM >60 days → Cold
+
+**Trade-offs:** ~20% of initial classifications will be wrong. Accepted — corrects automatically after first scrape cycle.
+
+---
+
+### Domain **NEXT_DATA** — Fields Extracted
+
+**Decision:** Extract only these fields from Domain **NEXT_DATA** per suburb request:
+
+From `propertyCategories` filtered to `propertyCategory: "House"`:
+
+- `medianSoldPrice` → Relative Median Gap signal
+- `numberSold` → Sales Volume Momentum signal + data_thin check
+- `salesGrowthList` (year-on-year) → Sales Volume Momentum trend
+- `daysOnMarket` → scrape tier reclassification
+- `auctionClearanceRate` → context layer display only
+
+From `statistics`:
+
+- `ownerOccupierPercentage` → Red Flag alert (if <70%)
+- `renterPercentage` → Red Flag alert (if >50%)
+- `population` → context layer display only
+
+Everything else (school data, listing cards, surrounding suburb links) is ignored.
+
+---
+
+### Income-to-Median Ratio — Context Layer Only
+
+**Decision:** Do not include income-to-median affordability ratio as a scoring signal. Display as context layer only.
+
+**Rationale:** ABS Census income data is 5 years stale (2021 census, next 2026). A 5-year-old affordability ratio is not a leading indicator. Leading signals already in the model (vacancy rate, MOI, sales volume momentum, population growth) are more current and more predictive.
+
+**Implementation:** If income data is available, display alongside suburb card in UI. Weight = 0 in scoring.
+
+---
+
+### Scoring Model Update — Sales Volume Momentum Added
+
+**Decision:** Add Sales Volume Momentum as a scored signal at 10% weight. Adjust Relative Median Gap from 15% to 5%.
+
+**Rationale:** Sales volume trend (rising quarterly number of sales) is a leading demand indicator confirmed by Domain **NEXT_DATA** data availability. Relative Median Gap is a useful context signal but less predictive than volume momentum for buy-and-hold growth thesis.
+
+**Revisit when:** Eval set shows relative median is outperforming volume momentum in backtesting.
+
+---
+
+## Session 5 Decisions
+
+---
+
+### Domain **NEXT_DATA** — Apollo GraphQL Structure
+
+**Decision:** Extract suburb data from `__APOLLO_STATE__` inside `__NEXT_DATA__`, not from a top-level `suburbData` prop.
+
+**Rationale:** Domain uses Apollo GraphQL client-side caching. Data lives under two Apollo keys:
+
+- `LocationProfile:{id}` → `data.propertyCategories` (price/volume per bedroom count)
+- `Suburb:{base64}` → `statistics` (owner-occupier %, population)
+
+**Implementation detail:** `propertyCategories` has one entry per bedroom count — there is no aggregate "all bedrooms" entry. Aggregation strategy: `number_sold` = sum across all House entries; `median_sold_price` / `days_on_market` / `sales_growth_list` = taken from the entry with the highest `numberSold` (dominant bedroom count).
+
+**Revisit when:** Domain migrates away from Apollo or restructures its GraphQL schema.
+
+---
+
+### Domain Suburb Profile URL Format
+
+**Decision:** Domain suburb profile slugs follow the format `{suburb-kebab}-{state-lower}-{postcode}`.
+Example: `paddington-qld-4064` → `https://www.domain.com.au/suburb-profile/paddington-qld-4064`
+
+**Rationale:** Verified by live HTTP test (April 2026). The reverse order (`suburb-postcode-state`) returns 404.
+
+---
+
+### Postcode Source — Decision Deferred
+
+**Decision:** Postcode enrichment for geography_trinity.json deferred to Session 6. ABS does not publish cross-geography concordances (SAL→POA) as downloadable tabular files — only as shapefiles (unsuitable) or same-geography edition-change CSVs.
+
+**Options under consideration for Session 6:**
+
+- data.gov.au "Australian Postcodes" dataset (government open data)
+- Derive postcodes from Domain slug after first scrape pass
+
+**Revisit when:** Session 6 begins. Postcodes are a blocker for SQM scraper (postcode-keyed) and for generating complete Domain slugs.
+
+---
+
+### SA2 — Deprioritised
+
+**Decision:** SA2 enrichment deferred indefinitely. No scored signal uses SA2 directly. ABS cross-geography concordance (SAL→SA2) unavailable as a tabular file.
+
+**Revisit when:** A Phase 2 signal explicitly requires SA2 joins.
+
+---
+
+## Scoring Weights History
+
+| Version | Date      | Vacancy | Stock | Population | Infra | Sales Volume | Relative Median | Notes                                                |
+| ------- | --------- | ------- | ----- | ---------- | ----- | ------------ | --------------- | ---------------------------------------------------- |
+| v1.0    | Session 1 | 0.25    | 0.20  | 0.20       | 0.20  | —            | 0.15            | Initial weights                                      |
+| v1.1    | Session 4 | 0.25    | 0.20  | 0.20       | 0.20  | 0.10         | 0.05            | Sales Volume Momentum added, Relative Median reduced |
+
+> Always run 30-suburb eval set before changing weights. Log all changes here with rationale.

@@ -5,6 +5,7 @@
 
 # Local only — do not share
 PROJECT.md
+propvest_start.txt
 
 # Python
 __pycache__/

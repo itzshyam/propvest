@@ -12,9 +12,9 @@ pyyaml>=6.0,<7.0
 # Database
 supabase>=2.0,<3.0
 
-# Scraping (Phase 1 prep — activate when scrapers are built)
-# crawl4ai
-# scrapegraphai
+# Scraping
+curl-cffi>=0.6,<1.0  # Domain + SQM — Chrome TLS impersonation (Akamai bypass)
+# scrapegraphai      # Infrastructure pipeline parsing (activate in Phase 1 later)
 
 # Backend (Phase 2)
 # fastapi
