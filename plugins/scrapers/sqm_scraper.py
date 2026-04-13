@@ -56,8 +56,11 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).parents[2]
 OUTPUT_PATH = ROOT / "data" / "raw" / "sqm_signals.json"
 
+# Session 6: Confirmed correct SQM URLs (graph_listings.php returns 404)
+# Vacancy rate page: uses var data=[{year,month,listings,properties,vr},...] JS format
+# Listings page: now at /property/total-property-listings with {r30,r60,r90,r180,r180p} format
 _SQM_VACANCY_URL = "https://sqmresearch.com.au/graph_vacancy.php?postcode={postcode}&t=1"
-_SQM_LISTINGS_URL = "https://sqmresearch.com.au/graph_listings.php?postcode={postcode}&t=1"
+_SQM_LISTINGS_URL = "https://sqmresearch.com.au/property/total-property-listings?postcode={postcode}&t=1"
 
 _MIN_DELAY = 3.0
 _MAX_DELAY = 8.0
@@ -146,21 +149,32 @@ class SqmScraper(BaseScraper):
         }
 
     def _fetch_vacancy(self, postcode: str) -> float | None:
-        """Fetch vacancy rate % for a postcode from SQM Research."""
+        """
+        Fetch vacancy rate for a postcode from SQM Research.
+
+        Page uses: var data = [{year, month, listings, properties, vr}, ...]
+        We take the most recent row's `vr` field (decimal, e.g. 0.0709 = 7.09%).
+        Returns the rate as a percentage (0–100 scale), e.g. 7.09.
+        """
         url = _SQM_VACANCY_URL.format(postcode=postcode)
         html = self._get(url)
         if not html:
             return None
-        return self._parse_latest_value(html, signal="vacancy")
+        return self._parse_vacancy_rate(html)
 
     def _fetch_stock(self, postcode: str) -> int | None:
-        """Fetch total stock on market for a postcode from SQM Research."""
+        """
+        Fetch total stock on market for a postcode from SQM Research.
+
+        Page uses: var data = [{year, month, r30, r60, r90, r180, r180p}, ...]
+        r30/r60/r90/r180/r180p = listings aged 0-30, 30-60, 60-90, 90-180, 180+ days.
+        Total stock = sum of all age brackets.
+        """
         url = _SQM_LISTINGS_URL.format(postcode=postcode)
         html = self._get(url)
         if not html:
             return None
-        val = self._parse_latest_value(html, signal="listings")
-        return int(val) if val is not None else None
+        return self._parse_stock_on_market(html)
 
     def _get(self, url: str) -> str | None:
         try:
@@ -178,36 +192,57 @@ class SqmScraper(BaseScraper):
             logger.warning("SQM request error: %s — %s", url, exc)
             return None
 
-    def _parse_latest_value(self, html: str, signal: str) -> float | None:
+    def _parse_sqm_data(self, html: str) -> list[dict] | None:
         """
-        SQM embeds chart data as JavaScript arrays in the HTML.
-        Common patterns:
-          data.addRows([[new Date(2024,10,1), 1.2], ...])
-          var data = [[...], [...]]
-
-        We extract the most recent (last) numeric value in the data array.
+        Parse the common SQM data format: var data = [{...}, ...];
+        Returns the parsed list of dicts, or None if parsing fails.
         """
-        # Pattern 1: Highcharts / Google Charts style data arrays
-        # Looks for sequences like [[..., numeric], [... numeric]]
-        arrays = re.findall(r'\[\s*(?:new Date\([^)]+\)\s*,\s*)?([\d.]+)\s*\]', html)
-        if arrays:
-            try:
-                return float(arrays[-1])
-            except ValueError:
-                pass
+        match = re.search(r'var\s+data\s*=\s*(\[.*?\])\s*;', html, re.DOTALL)
+        if not match:
+            logger.debug("var data = [...] not found in SQM response")
+            return None
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError as exc:
+            logger.debug("JSON parse error on SQM data: %s", exc)
+            return None
 
-        # Pattern 2: JSON array embedded as a variable
-        match = re.search(r'data\s*=\s*(\[.*?\])\s*;', html, re.DOTALL)
-        if match:
-            try:
-                rows = json.loads(match.group(1))
-                if rows and isinstance(rows[-1], (list, tuple)) and len(rows[-1]) >= 2:
-                    return float(rows[-1][-1])
-            except (json.JSONDecodeError, ValueError, IndexError):
-                pass
+    def _parse_vacancy_rate(self, html: str) -> float | None:
+        """
+        Parse vacancy rate from SQM vacancy page.
+        Data format: [{year, month, listings, properties, vr}, ...]
+        Returns vacancy rate as a percentage (0–100), e.g. 7.09 for 7.09%.
+        """
+        rows = self._parse_sqm_data(html)
+        if not rows:
+            return None
+        last = rows[-1]
+        vr = last.get("vr")
+        if vr is None:
+            return None
+        try:
+            return round(float(vr) * 100, 2)
+        except (ValueError, TypeError):
+            return None
 
-        logger.debug("Could not parse %s data from SQM response", signal)
-        return None
+    def _parse_stock_on_market(self, html: str) -> int | None:
+        """
+        Parse total stock on market from SQM total-property-listings page.
+        Data format: [{year, month, r30, r60, r90, r180, r180p}, ...]
+        Total = sum of all listing-age buckets from the most recent month.
+        """
+        rows = self._parse_sqm_data(html)
+        if not rows:
+            return None
+        last = rows[-1]
+        try:
+            total = sum(
+                int(last.get(k, 0) or 0)
+                for k in ("r30", "r60", "r90", "r180", "r180p")
+            )
+            return total if total > 0 else None
+        except (ValueError, TypeError):
+            return None
 
     # ------------------------------------------------------------------
     # Queue management

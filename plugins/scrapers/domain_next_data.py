@@ -107,12 +107,14 @@ class DomainNextData(BaseScraper):
                 )
                 slugs = slugs[:_DAILY_MAX]
 
-            results, blocked = self._scrape_batch(slugs)
+            results, true_blocks, no_data = self._scrape_batch(slugs)
 
-            block_rate = blocked / len(slugs) if slugs else 0
+            # Block rate = true WAF blocks only (403/429/network errors)
+            # "No house data" returns are NOT blocks — they're legitimate empty suburbs
+            block_rate = true_blocks / len(slugs) if slugs else 0
             if block_rate > _BLOCK_RATE_ALERT:
                 logger.warning(
-                    "Block rate %.0f%% exceeds threshold %.0f%% — "
+                    "TRUE block rate %.0f%% exceeds threshold %.0f%% — "
                     "consider pausing Domain scraping",
                     block_rate * 100,
                     _BLOCK_RATE_ALERT * 100,
@@ -120,9 +122,10 @@ class DomainNextData(BaseScraper):
 
             self._save(results)
             logger.info(
-                "Domain: %d suburbs scraped, %d blocked (%.0f%% block rate)",
+                "Domain: %d scraped, %d no-house-data, %d true-blocks (%.0f%% block rate)",
                 len(results),
-                blocked,
+                no_data,
+                true_blocks,
                 block_rate * 100,
             )
         except Exception as exc:
@@ -137,16 +140,26 @@ class DomainNextData(BaseScraper):
     # ------------------------------------------------------------------
     # Scrape batch
     # ------------------------------------------------------------------
-    def _scrape_batch(self, slugs: list[str]) -> tuple[list[dict], int]:
+    _NO_DATA_SENTINEL = object()  # Returned when page loads fine but has no house data
+
+    def _scrape_batch(self, slugs: list[str]) -> tuple[list[dict], int, int]:
+        """
+        Returns (results, true_blocks, no_data_count).
+          true_blocks  — HTTP 403/429/network errors (genuine WAF blocks)
+          no_data_count — page returned 200 but had no house data (legitimate, not a block)
+        """
         results = []
-        blocked = 0
+        true_blocks = 0
+        no_data = 0
 
         for i, slug in enumerate(slugs):
             logger.info("[%d/%d] Scraping: %s", i + 1, len(slugs), slug)
             record = self._scrape_suburb(slug)
 
-            if record is None:
-                blocked += 1
+            if record is self._NO_DATA_SENTINEL:
+                no_data += 1  # legitimate empty — don't log as block
+            elif record is None:
+                true_blocks += 1
                 self._log_block(slug)
             else:
                 results.append(record)
@@ -157,7 +170,7 @@ class DomainNextData(BaseScraper):
                 logger.debug("Sleeping %.1fs", delay)
                 time.sleep(delay)
 
-        return results, blocked
+        return results, true_blocks, no_data
 
     # ------------------------------------------------------------------
     # Scrape a single suburb
@@ -186,11 +199,11 @@ class DomainNextData(BaseScraper):
 
         if resp.status_code == 403 or resp.status_code == 429:
             logger.warning("Blocked (%d) for %s", resp.status_code, slug)
-            return None
+            return None  # True WAF block
 
         if resp.status_code != 200:
             logger.warning("Unexpected status %d for %s", resp.status_code, slug)
-            return None
+            return None  # Treat non-200 as true block
 
         return self._extract(slug, resp.text)
 
@@ -222,7 +235,7 @@ class DomainNextData(BaseScraper):
         )
         if not match:
             logger.warning("__NEXT_DATA__ not found on page: %s", slug)
-            return None
+            return None  # Structural failure — treat as block
 
         try:
             raw = json.loads(match.group(1))
@@ -250,7 +263,7 @@ class DomainNextData(BaseScraper):
 
         if not house_entries:
             logger.info("No house data for %s (possibly no houses or no recent sales)", slug)
-            return None
+            return DomainNextData._NO_DATA_SENTINEL  # Legitimate empty — not a WAF block
 
         # Aggregate: sum sales, use dominant bedroom count for price signals
         total_sold = sum(_safe_int(c.get("numberSold")) or 0 for c in house_entries)

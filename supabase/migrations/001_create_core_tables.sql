@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS suburbs (
 
     -- Scraping
     scrape_tier         TEXT        CHECK (scrape_tier IN ('Hot', 'Warm', 'Cold')),
-    domain_slug         TEXT,                           -- e.g. "paddington-2021-nsw"
+    domain_slug         TEXT,                           -- e.g. "paddington-qld-4064"
 
     -- Signal outputs (populated by scrapers, updated on each run)
     median_house_price  NUMERIC(12, 2),
@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS suburbs (
     created_at          TIMESTAMPTZ DEFAULT NOW(),
     updated_at          TIMESTAMPTZ DEFAULT NOW(),
 
-    UNIQUE (state, suburb_name, postcode)
+    -- Natural key: suburb_name + state (postcode excluded — 10 suburbs have NULL postcode)
+    UNIQUE (suburb_name, state)
 );
 
 CREATE INDEX IF NOT EXISTS idx_suburbs_state        ON suburbs (state);

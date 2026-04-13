@@ -381,6 +381,85 @@ Example: `paddington-qld-4064` → `https://www.domain.com.au/suburb-profile/pad
 
 ---
 
+## Session 6 Decisions
+
+---
+
+### Postcode Source — data.gov.au Australian Postcodes CSV
+
+**Decision:** Use the data.gov.au "Australian Postcodes" CSV dataset (mirrored at GitHub: matthewproctor/australianpostcodes) to enrich geography_trinity.json with postcodes. Match on (suburb_name_upper, state) → postcode.
+
+**Options considered:**
+
+- ABS SAL→POA concordance ZIPs — all URLs 404 (ABS no longer hosts tabular concordances)
+- Derive from Domain slug after scrape — circular dependency (need postcode to build slug)
+- Manual entry — infeasible at 8,639 rows
+
+**Rationale:** The data.gov.au dataset has 18,559 rows covering all Australian localities. After joining 8,629/8,639 suburbs matched (99.9%). The 10 remaining are national parks and territories with no postal addresses (Blue Mountains National Park, Moreton Bay area, etc.) — these will never appear on Domain and are data_thin by definition.
+
+**Implementation notes:**
+
+- Suburb names with ABS disambiguation parens (e.g., "Paddington (Qld)") have parens stripped before matching
+- 704 suburbs map to multiple postcodes — dominant (first/lowest) postcode chosen; all logged to data/raw/abs/multi_postcode_suburbs.json
+- Postcodes zero-padded to 4 digits (e.g., ACT 200 → "0200")
+- `_domain_slug()` updated to strip parens from suburb name before slugifying — fixes "paddington-qld-qld-4064" → "paddington-qld-4064"
+- python-dotenv added to requirements.txt for .env loading
+
+**Revisit when:** ABS restores SAL→POA concordance tabular files (would give higher-quality match using official area codes).
+
+---
+
+### Domain Block Detection — False Positive Fix
+
+**Decision:** Distinguish true WAF blocks (HTTP 403/429/network errors) from "no house data" responses (200 OK, page loaded, no house sales for suburb). Only WAF blocks count toward the 20% block rate alert threshold.
+
+**Rationale:** Initial scrape of 50 QLD suburbs showed 34% "block rate" — but zero actual 403/429 responses. All 17 "blocks" were legitimate empty results for small rural hamlets with no house sales on Domain. False alert at 34% would have halted scraping unnecessarily.
+
+**Implementation:** `_scrape_batch()` returns `(results, true_blocks, no_data_count)` as separate counts. `_scrape_suburb()` returns `None` for WAF blocks, `_NO_DATA_SENTINEL` for legitimate empty pages. Only `None` triggers `_log_block()` and increments `true_blocks`.
+
+**Revisit when:** Domain adds a different empty-page response format that needs separate handling.
+
+---
+
+### Supabase Schema — Unique Constraint on (suburb_name, state)
+
+**Decision:** Change `UNIQUE (state, suburb_name, postcode)` to `UNIQUE (suburb_name, state)` in the suburbs table DDL.
+
+**Rationale:** 10 suburbs have NULL postcodes (national parks, territories). PostgreSQL NULL values do not satisfy UNIQUE constraints — two rows with NULL postcode and the same (state, suburb_name) would not conflict and could be duplicated on re-upsert. The natural key for suburb identity is (suburb_name, state) without postcode.
+
+**Impact:** Migration SQL updated before first run — no data loss, no rollback needed.
+
+---
+
+### SQM Research — URL and Data Format Changes
+
+**Decision:** Update SQM scraper to use correct 2026 URL and data format.
+
+**Old (broken):**
+
+- Listings: `https://sqmresearch.com.au/graph_listings.php?postcode={pc}&t=1` → 404
+- Parser: regex looking for `[[new Date(...), value]]` style arrays → never matched
+
+**New (working):**
+
+- Vacancy: `graph_vacancy.php` still works — but data is `var data = [{year,month,listings,properties,vr}...]` JSON format
+- Listings: `https://sqmresearch.com.au/property/total-property-listings?postcode={pc}&t=1` → `var data = [{year,month,r30,r60,r90,r180,r180p}...]`
+- Stock on market = r30 + r60 + r90 + r180 + r180p from most recent month
+
+**Verified:** Paddington (4064) → vacancy_rate=0.57%, stock_on_market=81. Batch of 50 QLD postcodes: 50/50 success, both signals present.
+
+---
+
+### base_scraper.log_run() — Dual-Write (Supabase + File)
+
+**Decision:** Update `log_run()` to write to both Supabase `scrape_log` table AND `data/raw/scrape_log.json`. Supabase write attempted first; file write always runs as fallback.
+
+**Rationale:** Supabase is the production log store. File log provides offline capability and disaster recovery. Supabase failures are logged as warnings and do not raise exceptions.
+
+**Status:** Code complete. Supabase writes currently failing because 001_create_core_tables.sql has not been run yet. File fallback active.
+
+---
+
 ## Scoring Weights History
 
 | Version | Date      | Vacancy | Stock | Population | Infra | Sales Volume | Relative Median | Notes                                                |
