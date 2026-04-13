@@ -70,28 +70,82 @@ Scoring is fully deterministic — the LLM explains scores, never computes them.
 
 ---
 
+## Project Status
+
+Currently in **Phase 1 — Foundation (Session 6 complete).**
+
+| Component                      | Status                                         |
+| ------------------------------ | ---------------------------------------------- |
+| ABS Growth Funnel ingestor     | ✓ Complete — 8,639 Tier 1 suburbs              |
+| Geography Trinity builder      | ✓ Complete — postcodes + slugs populated       |
+| Scrape tier classifier         | ✓ Complete — bootstrap + reclassify modes      |
+| Domain scraper (QLD/WA/NT/TAS) | ✓ First run complete — 33 QLD signals          |
+| SQM scraper (national)         | ✓ First run complete — 50 postcodes            |
+| NSW/VIC/SA Valuer General      | ✓ Built — awaiting data file downloads         |
+| Supabase migration             | ⚠ Written — not yet run (manual action needed) |
+| Supabase bulk upsert           | ⚠ Built — blocked on migration                 |
+| Deterministic scoring engine   | ← TODO Session 7                               |
+| Windmill workflow definitions  | ← TODO Session 7                               |
+| FastAPI backend                | ← TODO Phase 2                                 |
+| Next.js frontend               | ← TODO Phase 2                                 |
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for full technical design and [TODO.md](./TODO.md) for current session state.
+
+---
+
 ## Getting Started
 
-> Prerequisites: Python 3.11+, Node.js 18+
+### Prerequisites
+
+- Python 3.11+
+- Supabase project (free tier) with credentials in `.env`
+
+### Setup
 
 ```bash
 git clone https://github.com/itzshyam/propvest.git
 cd propvest
 cp .env.example .env
+# Add SUPABASE_URL and SUPABASE_ANON_KEY to .env
 pip install -r requirements.txt
 ```
 
-Full setup guide coming in Phase 1 completion.
+### Run the data pipeline
 
----
+```bash
+# Step 1: ABS Growth Funnel — generates tier1_candidates.json (8,639 suburbs)
+python -m plugins.scrapers.abs_ingestor
 
-## Project Status
+# Step 2: Geography Trinity — generates geography_trinity.json with postcodes + slugs
+python -m plugins.scrapers.geography_builder
 
-Currently in **Phase 1 — Foundation (Session 5 complete).**
+# Step 3: Bootstrap scrape tiers from ABS growth rates
+python -m plugins.scoring.tier_classifier --mode bootstrap
 
-All scrapers built and tested. Geography Trinity generated (8,639 suburbs). Scrape tiers bootstrapped. Postcode enrichment is the only remaining blocker before first live scrape runs.
+# Step 4: Run Supabase migration (manual — paste SQL into Supabase SQL Editor)
+# File: supabase/migrations/001_create_core_tables.sql
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for full technical design and [TODO.md](./TODO.md) for current session state.
+# Step 5: Bulk upsert suburbs into Supabase
+python -m plugins.scrapers.supabase_loader
+
+# Step 6: Scrape Domain signals (QLD, 50 suburbs per run)
+python -m plugins.scrapers.domain_next_data --state QLD --batch 50
+
+# Step 7: Reclassify tiers from real DOM data
+python -m plugins.scoring.tier_classifier --mode reclassify
+
+# Step 8: Scrape SQM vacancy + stock signals
+python -m plugins.scrapers.sqm_scraper --batch 50
+```
+
+### Required manual data files
+
+These files must be downloaded manually and placed before running `abs_ingestor.py`:
+
+| File                                 | Source                                                                                                                                                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data/raw/abs/erp_lga_manual.xlsx`   | [ABS Regional Population 2024-25](https://www.abs.gov.au/statistics/people/population/regional-population/latest-release)                                                                                        |
+| `data/raw/abs/sal_to_lga_manual.csv` | [ABS ASGS Correspondences](https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs-edition-3/jul2021-jun2026/access-and-downloads/correspondences) — find SAL→LGA concordance |
 
 ---
 

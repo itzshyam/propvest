@@ -9,6 +9,17 @@ Sources (all free, ABS ASGS Edition 3):
   - SAL → SA2:  ABS ASGS CG_SAL_2021_SA2_2021.zip
   - SAL → POA:  ABS ASGS CG_SAL_2021_POA_2021.zip  (POA code = 4-digit postcode)
 
+Postcode fallback (Session 6):
+  When ABS SAL→POA concordance is unavailable (all known URLs 404), postcode enrichment
+  falls back to data.gov.au Australian Postcodes CSV (locality + state → postcode).
+  Downloaded from: https://raw.githubusercontent.com/matthewproctor/australianpostcodes/master/australian_postcodes.csv
+  (mirror of the official data.gov.au/data/dataset/Australian-postcodes dataset)
+
+  Matching strategy:
+    - Suburb names like "Abbotsford (NSW)" have the parenthetical stripped → "ABBOTSFORD"
+    - Where a suburb maps to multiple postcodes, the dominant (first/lowest by sort order) is used
+    - All multi-postcode mappings are logged to data/raw/abs/multi_postcode_suburbs.json
+
 The SAL→SA2 and SAL→POA files have M:N relationships (a suburb can straddle
 multiple postcodes / SA2s). We resolve them by taking the record with the
 highest RATIO_FROM_TO per SAL code, i.e. the dominant postcode/SA2.
@@ -55,6 +66,16 @@ _ASGS_BASE = (
     "australian-statistical-geography-standard-asgs-edition-3/"
     "jul2021-jun2026/access-and-downloads/correspondences/"
 )
+
+# data.gov.au postcode CSV (locality + state → postcode)
+# Official dataset: https://data.gov.au/data/dataset/Australian-postcodes
+# Served via GitHub mirror (data.gov.au redirect resolution is broken for programmatic access)
+_DATAGOV_POSTCODES_URL = (
+    "https://raw.githubusercontent.com/matthewproctor/"
+    "australianpostcodes/master/australian_postcodes.csv"
+)
+_DATAGOV_POSTCODES_CACHE = "australian_postcodes.csv"
+_MULTI_POSTCODE_LOG = "multi_postcode_suburbs.json"
 
 _SA2_CONCORDANCE_URLS = [
     _ASGS_BASE + "CG_SAL_2021_SA2_2021.zip",
@@ -103,7 +124,7 @@ class GeographyBuilder(BaseScraper):
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
-    def run(self) -> list[dict]:
+    def run(self, enrich_postcodes: bool = True) -> list[dict]:
         logger.info("GeographyBuilder: starting run")
         error = None
         records: list[dict] = []
@@ -115,6 +136,26 @@ class GeographyBuilder(BaseScraper):
             qualifying = self._qualifying_lgas()
 
             records = self._build(sal_lga, sal_sa2, sal_poa, qualifying)
+
+            # Postcode enrichment: if ABS POA concordance wasn't available,
+            # fill in missing postcodes from data.gov.au locality+state lookup.
+            if enrich_postcodes:
+                missing_before = sum(1 for r in records if not r.get("postcode"))
+                if missing_before > 0:
+                    logger.info(
+                        "Postcode enrichment: %d suburbs missing postcode — "
+                        "enriching from data.gov.au postcodes CSV",
+                        missing_before,
+                    )
+                    postcode_lookup = self._load_datagov_postcodes()
+                    records = self._enrich_postcodes_from_datagov(records, postcode_lookup)
+                    missing_after = sum(1 for r in records if not r.get("postcode"))
+                    logger.info(
+                        "Postcode enrichment complete: %d filled, %d still missing",
+                        missing_before - missing_after,
+                        missing_after,
+                    )
+
             self._save_json(records)
 
             logger.info(
@@ -228,6 +269,110 @@ class GeographyBuilder(BaseScraper):
             label="SAL→POA",
             optional=True,
         )
+
+    def _load_datagov_postcodes(self) -> dict[tuple[str, str], str]:
+        """
+        Load data.gov.au Australian Postcodes CSV and build a lookup:
+            (locality_upper, state_upper) → dominant_postcode
+
+        Dominant postcode: where a locality maps to multiple postcodes, we take
+        the first entry when sorted by postcode (typically the primary/lowest code).
+
+        Multi-postcode suburbs are logged to data/raw/abs/multi_postcode_suburbs.json.
+        Postcodes are zero-padded to 4 digits (e.g. 200 → "0200" for ACT).
+        """
+        cache = CACHE_DIR / _DATAGOV_POSTCODES_CACHE
+        if not cache.exists():
+            logger.info("Downloading data.gov.au postcodes CSV: %s", _DATAGOV_POSTCODES_URL)
+            try:
+                resp = requests.get(_DATAGOV_POSTCODES_URL, headers=_HEADERS, timeout=60)
+                resp.raise_for_status()
+                cache.write_bytes(resp.content)
+                logger.info("Downloaded %d bytes → %s", len(resp.content), cache)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to download postcodes CSV: {exc}\n"
+                    f"Manual fix: download {_DATAGOV_POSTCODES_URL} → {cache}"
+                ) from exc
+
+        df = pd.read_csv(cache, dtype={"postcode": str}, low_memory=False)
+        df["postcode"] = df["postcode"].str.strip().str.zfill(4)
+        df["locality_upper"] = df["locality"].str.upper().str.strip()
+        df["state_upper"] = df["state"].str.upper().str.strip()
+
+        # Drop rows missing key fields
+        df = df.dropna(subset=["locality_upper", "state_upper", "postcode"])
+        df = df[df["postcode"].str.match(r"^\d{4}$")]
+
+        # Sort so first entry = lowest postcode per (locality, state)
+        df = df.sort_values("postcode")
+
+        # Build multi-postcode audit log
+        multi: dict[str, list[str]] = {}
+        grouped = df.groupby(["locality_upper", "state_upper"])["postcode"].apply(list)
+        for (locality, state), postcodes in grouped.items():
+            unique = list(dict.fromkeys(postcodes))  # preserve order, deduplicate
+            if len(unique) > 1:
+                key = f"{locality} ({state})"
+                multi[key] = unique
+
+        multi_log_path = CACHE_DIR / _MULTI_POSTCODE_LOG
+        multi_log_path.write_text(json.dumps(multi, indent=2, sort_keys=True))
+        logger.info(
+            "Multi-postcode suburbs: %d logged to %s", len(multi), multi_log_path
+        )
+
+        # Build dominant lookup: first (lowest) postcode per (locality, state)
+        dominant = df.drop_duplicates(subset=["locality_upper", "state_upper"], keep="first")
+        lookup: dict[tuple[str, str], str] = {
+            (row["locality_upper"], row["state_upper"]): row["postcode"]
+            for _, row in dominant.iterrows()
+        }
+        logger.info("Postcode lookup built: %d (locality, state) pairs", len(lookup))
+        return lookup
+
+    def _enrich_postcodes_from_datagov(
+        self, records: list[dict], lookup: dict[tuple[str, str], str]
+    ) -> list[dict]:
+        """
+        Fill in missing postcodes using the data.gov.au locality+state lookup.
+        Also regenerates domain_slug for any record whose postcode changes.
+
+        Matching strategy:
+          1. Try exact upper-case match: (suburb_name.upper(), state.upper())
+          2. Try stripped (remove parenthetical suffixes): "Abbotsford (NSW)" → "ABBOTSFORD"
+        """
+        filled = 0
+        still_missing = 0
+        for record in records:
+            if record.get("postcode"):
+                continue  # already has a postcode from ABS concordance
+
+            name = record.get("suburb_name", "")
+            state = record.get("state", "").upper()
+
+            # Try exact match first
+            postcode = lookup.get((name.upper(), state))
+
+            # Fallback: strip parenthetical suffix  e.g. "Abbotsford (NSW)" → "ABBOTSFORD"
+            if not postcode and "(" in name:
+                stripped = re.sub(r"\s*\(.*?\)\s*", "", name).strip().upper()
+                postcode = lookup.get((stripped, state))
+
+            if postcode:
+                record["postcode"] = postcode
+                # Regenerate slug now that postcode is known
+                record["domain_slug"] = _domain_slug(name, postcode, record.get("state", ""))
+                filled += 1
+            else:
+                still_missing += 1
+
+        logger.info(
+            "_enrich_postcodes_from_datagov: filled=%d still_missing=%d",
+            filled,
+            still_missing,
+        )
+        return records
 
     def _load_concordance(
         self,
@@ -421,8 +566,14 @@ def _domain_slug(name: str, postcode: str, state: str) -> str:
     Format: {suburb-kebab-case}-{state-lower}-{postcode}
     Example: "Paddington" + "QLD" + "4064" → "paddington-qld-4064"
     Verified: domain.com.au/suburb-profile/paddington-qld-4064 returns 200.
+
+    Parenthetical disambiguation suffixes are stripped before slugifying:
+      "Paddington (Qld)" → "paddington-qld-4064"   (not "paddington-qld-qld-4064")
+      "Abbotsford (NSW)" → "abbotsford-nsw-2046"
     """
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    # Strip ABS disambiguation parens: "Paddington (Qld)", "Alison (Central Coast - NSW)"
+    clean_name = re.sub(r"\s*\(.*?\)\s*", "", name).strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", clean_name.lower()).strip("-")
     parts = [p for p in [slug, state.lower(), postcode] if p]
     return "-".join(parts)
 

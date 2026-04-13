@@ -92,6 +92,8 @@ Suburbs are classified into scrape tiers based on turnover velocity:
 **Bootstrap:** ABS growth rate from tier1_candidates.json used for initial classification.
 **Reclassification:** After first scrape pass, actual DOM from Domain replaces ABS growth as classifier.
 
+**Current tier counts (post Session 6 first scrape):** Hot=1,238 / Warm=2,261 / Cold=0
+
 ---
 
 ## Data Signals (Scoring Model v1.1)
@@ -164,7 +166,17 @@ Akamai (Domain's WAF) uses JA3/JA4 TLS fingerprinting as its primary detection v
 
 - 50-80 requests/day to Domain
 - Randomised 3-8 second delays between requests
-- Not bulletproof — monitor block rate, alert if >20%
+- Not bulletproof — monitor block rate, alert if >20% **true WAF blocks** (403/429)
+- Note: "no house data" responses (200 OK, empty suburb) are NOT blocks — rural hamlets
+  with zero house sales are expected and do not count toward the block rate threshold
+
+**SQM URL format (as of Session 6, April 2026):**
+
+- Vacancy: `https://sqmresearch.com.au/graph_vacancy.php?postcode={pc}&t=1`
+  Data: `var data = [{year, month, listings, properties, vr}, ...]` — parse `vr` field × 100
+- Listings: `https://sqmresearch.com.au/property/total-property-listings?postcode={pc}&t=1`
+  Data: `var data = [{year, month, r30, r60, r90, r180, r180p}, ...]` — sum all buckets
+  ⚠️ `graph_listings.php` is 404 as of April 2026
 
 **Why NOT Camoufox:**
 Camoufox had a year-long maintenance gap and is confirmed experimental/unstable as of 2026. Not suitable for production use.
@@ -249,18 +261,19 @@ Camoufox had a year-long maintenance gap and is confirmed experimental/unstable 
     __init__.py
     /scrapers
       __init__.py
-      base_scraper.py         ✓ BUILT
+      base_scraper.py         ✓ BUILT (Session 6: dual-write log_run → Supabase + file)
       abs_ingestor.py         ✓ BUILT — 8,639 Tier 1 suburbs
-      geography_builder.py    ✓ BUILT — Geography Trinity (SAL↔postcode↔SA2↔LGA)
-      nsw_valuer_general.py   ✓ BUILT — NSW .DAT bulk parser
-      vic_valuer_general.py   ✓ BUILT — VIC Data.Vic CSV parser
-      sa_valuer_general.py    ✓ BUILT — SA VG Excel parser
-      domain_next_data.py     ✓ BUILT — curl-cffi, Apollo __NEXT_DATA__, live-tested
-      sqm_scraper.py          ✓ BUILT — curl-cffi, vacancy + stock on market
+      geography_builder.py    ✓ BUILT (Session 6: data.gov.au postcode enrichment, fixed slug)
+      supabase_loader.py      ✓ BUILT (Session 6: bulk upsert 8,639 suburbs → Supabase)
+      nsw_valuer_general.py   ✓ BUILT — NSW .DAT bulk parser (awaiting data files)
+      vic_valuer_general.py   ✓ BUILT — VIC Data.Vic CSV parser (awaiting data files)
+      sa_valuer_general.py    ✓ BUILT — SA VG Excel parser (awaiting data files)
+      domain_next_data.py     ✓ BUILT (Session 6: block detection fixed, first run complete)
+      sqm_scraper.py          ✓ BUILT (Session 6: URL + parser fixed, first run complete)
     /scoring
       __init__.py
-      tier_classifier.py      ✓ BUILT — bootstrap + DOM reclassify
-      deterministic.py        ← TODO Phase 1 backlog
+      tier_classifier.py      ✓ BUILT — bootstrap + DOM reclassify (Session 6: first reclassify run)
+      deterministic.py        ← TODO Session 7
       llm_explainer.py        ← TODO (explain only, never compute)
     /signals
       vacancy_rate.py         ← TODO Phase 1 backlog
@@ -272,17 +285,54 @@ Camoufox had a year-long maintenance gap and is confirmed experimental/unstable 
   /data
     /raw
       /abs
+      /domain
       tier1_candidates.json       ✓ EXISTS (gitignored)
-      geography_trinity.json      ✓ EXISTS (gitignored) — 8,639 suburbs, tiers bootstrapped
+      geography_trinity.json      ✓ EXISTS (gitignored) — 8,639 suburbs, postcodes + tiers + slugs
+      domain_signals.json         ✓ EXISTS (gitignored) — 33 QLD signals (Session 6 first run)
+      sqm_signals.json            ✓ EXISTS (gitignored) — 50 postcode signals (Session 6 first run)
       scrape_log.json             ✓ EXISTS (gitignored)
   /supabase
     /migrations
-      001_create_core_tables.sql  ✓ BUILT — suburbs, scrape_log, api_cost_log DDL
-  /workflows                  ← TODO Session 6: Windmill definitions
+      001_create_core_tables.sql  ✓ BUILT (updated Session 6: UNIQUE constraint fix)
+                                  ⚠️ NOT YET RUN — tables don't exist in Supabase
+  /workflows                  ← TODO Session 7: Windmill definitions
   /skills                     ← Hermes SKILL.md files
   /api                        ← TODO Phase 2
   /frontend                   ← TODO Phase 2
 ```
+
+---
+
+## Postcode Enrichment (Session 6)
+
+ABS SAL→POA concordance ZIPs all return 404. Postcode enrichment uses **data.gov.au Australian Postcodes CSV** as fallback:
+
+- Source: `https://data.gov.au/data/dataset/Australian-postcodes`
+  (programmatic download via GitHub mirror: matthewproctor/australianpostcodes)
+- Match: `suburb_name_upper + state` → `postcode` (4-digit, zero-padded)
+- Parenthetical disambiguation stripped: "Paddington (Qld)" → "PADDINGTON" for matching
+- 704 suburbs map to multiple postcodes — dominant (lowest/first) chosen; all logged
+- Result: 8,629/8,639 suburbs with postcodes (99.9%)
+- 10 missing: national parks + territories with no postal addresses
+
+---
+
+## Supabase Setup (Session 6 — PENDING)
+
+Migration SQL written but **not yet run**. Tables don't exist.
+
+```
+MANUAL ACTION REQUIRED:
+1. Go to Supabase SQL Editor (https://nqnvijfqnxfuwoygfnhs.supabase.co)
+2. Run: supabase/migrations/001_create_core_tables.sql
+3. Then run: python -m plugins.scrapers.supabase_loader
+   Expected: 8,639 rows inserted, 0 errors
+```
+
+Once run:
+
+- `base_scraper.log_run()` will automatically write to `scrape_log` table (fallback to file always active)
+- `supabase_loader.py` will populate `suburbs` table
 
 ---
 
@@ -307,5 +357,5 @@ Camoufox had a year-long maintenance gap and is confirmed experimental/unstable 
 
 ---
 
-_Last updated: Session 5_
-_Next: Session 6 — Postcode enrichment → Supabase setup → first Domain + SQM live runs_
+_Last updated: Session 6_
+_Next: Session 7 — Supabase migration (manual) → continue Domain scraping → deterministic scoring engine_

@@ -8,6 +8,7 @@ requests>=2.31,<3.0
 
 # Config
 pyyaml>=6.0,<7.0
+python-dotenv>=1.0,<2.0
 
 # Database
 supabase>=2.0,<3.0
