@@ -52,6 +52,10 @@ data/raw/abs/
 # Regeneratable pipeline outputs
 data/raw/tier1_candidates.json
 data/raw/scrape_log.json
+data/raw/geography_trinity.json
+data/raw/domain_signals.json
+data/raw/sqm_signals.json
+data/raw/domain_block_log.json
 
 # Redis
 dump.rdb
