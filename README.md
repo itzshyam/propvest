@@ -72,22 +72,23 @@ Scoring is fully deterministic — the LLM explains scores, never computes them.
 
 ## Project Status
 
-Currently in **Phase 1 — Foundation (Session 6 complete).**
+Currently in **Phase 1 — Foundation (Session 7 complete).**
 
-| Component                      | Status                                         |
-| ------------------------------ | ---------------------------------------------- |
-| ABS Growth Funnel ingestor     | ✓ Complete — 8,639 Tier 1 suburbs              |
-| Geography Trinity builder      | ✓ Complete — postcodes + slugs populated       |
-| Scrape tier classifier         | ✓ Complete — bootstrap + reclassify modes      |
-| Domain scraper (QLD/WA/NT/TAS) | ✓ First run complete — 33 QLD signals          |
-| SQM scraper (national)         | ✓ First run complete — 50 postcodes            |
-| NSW/VIC/SA Valuer General      | ✓ Built — awaiting data file downloads         |
-| Supabase migration             | ⚠ Written — not yet run (manual action needed) |
-| Supabase bulk upsert           | ⚠ Built — blocked on migration                 |
-| Deterministic scoring engine   | ← TODO Session 7                               |
-| Windmill workflow definitions  | ← TODO Session 7                               |
-| FastAPI backend                | ← TODO Phase 2                                 |
-| Next.js frontend               | ← TODO Phase 2                                 |
+| Component                      | Status                                                   |
+| ------------------------------ | -------------------------------------------------------- |
+| ABS Growth Funnel ingestor     | ✓ Complete — 8,639 Tier 1 suburbs                        |
+| Geography Trinity builder      | ✓ Complete — postcodes + slugs populated (8,254 unique)  |
+| Scrape tier classifier         | ✓ Complete — Hot=1,277 / Warm=2,209 / Cold=13            |
+| Domain scraper (QLD/WA/NT/TAS) | ✓ Running — 171 signals across 4 states                  |
+| SQM scraper (national)         | ✓ Running — 75 QLD postcodes; WA/NT/TAS pending          |
+| NSW/VIC/SA Valuer General      | ✓ Built — awaiting data file downloads                   |
+| Supabase suburbs table         | ✓ Loaded — 8,254 rows (migration 001 run)                |
+| Deterministic scoring engine   | ✓ Built — v1.1, dynamic re-weighting, all tests pass     |
+| Signals loader                 | ✓ Built — 11,964 rows ready; blocked on migration 002    |
+| Supabase migration 002         | ⚠ Written — not yet run (manual action needed before S8) |
+| Windmill workflow definitions  | ← TODO Phase 1 backlog                                   |
+| FastAPI backend                | ← TODO Phase 2                                           |
+| Next.js frontend               | ← TODO Phase 2                                           |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for full technical design and [TODO.md](./TODO.md) for current session state.
 
@@ -122,20 +123,29 @@ python -m plugins.scrapers.geography_builder
 # Step 3: Bootstrap scrape tiers from ABS growth rates
 python -m plugins.scoring.tier_classifier --mode bootstrap
 
-# Step 4: Run Supabase migration (manual — paste SQL into Supabase SQL Editor)
+# Step 4: Run Supabase migration 001 (manual — paste SQL into Supabase SQL Editor)
 # File: supabase/migrations/001_create_core_tables.sql
 
 # Step 5: Bulk upsert suburbs into Supabase
 python -m plugins.scrapers.supabase_loader
 
-# Step 6: Scrape Domain signals (QLD, 50 suburbs per run)
-python -m plugins.scrapers.domain_next_data --state QLD --batch 50
+# Step 6: Scrape Domain signals (QLD, 75 suburbs per run)
+python -m plugins.scrapers.domain_next_data --state QLD --batch 75
 
 # Step 7: Reclassify tiers from real DOM data
 python -m plugins.scoring.tier_classifier --mode reclassify
 
 # Step 8: Scrape SQM vacancy + stock signals
-python -m plugins.scrapers.sqm_scraper --batch 50
+python -m plugins.scrapers.sqm_scraper --batch 75
+
+# Step 9: Run Supabase migration 002 (manual — paste SQL into Supabase SQL Editor)
+# File: supabase/migrations/002_add_signals_and_scores.sql
+
+# Step 10: Load all signals into Supabase
+python -m plugins.scrapers.signals_loader
+
+# Step 11: Score all suburbs and write to Supabase
+python -m plugins.scoring.deterministic --score-all --write-supabase
 ```
 
 ### Required manual data files

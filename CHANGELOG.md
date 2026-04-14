@@ -18,6 +18,54 @@
 
 ---
 
+## [0.7.0] — 2026-04-14
+
+### Added
+
+- `plugins/scoring/deterministic.py` — **deterministic scoring engine v1.1**
+  - All 6 signals with normalisation ranges locked (see DECISIONS.md Session 7)
+  - Dynamic re-weighting: missing signals redistribute weight proportionally; sum always = 1.0
+  - `SuburbSignals` and `ScorecardResult` dataclasses
+  - `--score-all` CLI: reads geography_trinity.json + signals files, prints ranked table
+  - `--write-supabase` flag: writes scores to `suburbs.score` (blocked until migration 002 run)
+  - 3 built-in test cases: high-vacancy=13.3 (<30 ✓), high-growth=84.8 (>65 ✓), re-weight sum=1.0000 ✓
+- `plugins/scrapers/signals_loader.py` — **signals → Supabase loader**
+  - Reads domain_signals.json + sqm_signals.json + geography_trinity.json
+  - Converts each to normalised signal rows: one row per (suburb, signal_name, source)
+  - SQM postcode records fan out to all suburbs sharing that postcode
+  - Dry-run validated: 11,964 rows (170 Domain × ~6 signals + 75 SQM × suburbs per postcode + 8,639 ABS)
+  - Upsert key: `(suburb_name, state, signal_name, source)`
+  - `--dry-run` flag for preview without writing
+- `supabase/migrations/002_add_signals_and_scores.sql` — **signals table + score columns**
+  - Creates `signals` table with UNIQUE(suburb_name, state, signal_name, source)
+  - `ALTER TABLE suburbs` adds `score NUMERIC(5,2)`, `score_version TEXT`, `scored_at TIMESTAMPTZ`
+  - NOT YET RUN — manual step required before Session 8
+
+### Changed
+
+- `plugins/scrapers/supabase_loader.py`
+  - Added deduplication before batching to fix PostgreSQL error 21000
+  - 385 duplicate (suburb_name, state) pairs dropped (suburbs straddling two LGAs in SAL→LGA M:N join)
+  - Keeps row with highest population per duplicate pair (dominant LGA)
+  - Result: 8,254 unique suburbs loaded (was failing at 8,639 with all 17 batches erroring)
+
+### Fixed
+
+- PostgreSQL error 21000 (`ON CONFLICT DO UPDATE command cannot affect row a second time`) in
+  supabase_loader: ABS SAL→LGA concordance M:N join creates duplicate (suburb_name, state) pairs
+  within a single batch — deduplication now happens in Python before any batch is sent
+
+### Notes
+
+- Domain scrape expanded to all 4 target states: QLD(49) + WA(52) + NT(36) + TAS(34) = 171 signals
+- SQM scrape: 75 QLD postcodes; WA/NT/TAS still pending
+- Tier reclassification post-4-state scrape: Hot=1,277, Warm=2,209, Cold=13
+- geography_trinity.json rebuilt (Session 7): `australian_postcodes.csv` was missing from prior run,
+  causing all postcodes to be null and all Domain slugs to be malformed → 100% apparent block rate
+- True unique suburb count is 8,254, not 8,639 — SAL→LGA M:N join inflates the raw count by 385
+
+---
+
 ## [0.6.0] — 2026-04-14
 
 ### Added
