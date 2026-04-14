@@ -460,6 +460,95 @@ Example: `paddington-qld-4064` → `https://www.domain.com.au/suburb-profile/pad
 
 ---
 
+## Session 7 Decisions
+
+---
+
+### Supabase Loader — Deduplication Before Batch Upsert
+
+**Decision:** Deduplicate geography_trinity.json by (suburb_name, state) before batching for Supabase upsert. Keep the row with the highest population per duplicate pair.
+
+**Options considered:**
+
+- Deduplicate in the database using ON CONFLICT — not possible; PostgreSQL error 21000 fires when the same conflict key appears multiple times within a single batch, before the conflict clause is evaluated
+- Deduplicate after batching, per-batch — fragile; a duplicate straddling a batch boundary could still pass
+- Deduplicate at source (geography_builder) — deferred; the M:N SAL→LGA join is intentional and useful for LGA attribution; dedup belongs at the loader layer
+
+**Rationale:** The ABS SAL→LGA concordance is a many-to-many join. Suburbs that straddle two LGA boundaries appear twice with different `lga_name` but the same `sal_code`. This is correct in the geography file (both LGAs are relevant) but must be collapsed to a single row before database upsert because (suburb_name, state) is the primary unique key. Choosing the row with the highest population selects the dominant/primary LGA, which is the most useful single value for administrative lookup.
+
+**Result:** 385 duplicate pairs dropped; 8,254 unique suburbs loaded (not 8,639 as originally expected).
+
+**Trade-offs:** Suburbs at LGA boundaries lose their secondary LGA attribution in the suburbs table. This is acceptable — the full M:N data remains in geography_trinity.json for any future multi-LGA queries.
+
+**Revisit when:** A scoring signal requires the secondary LGA attribution — at that point, add a `lga_name_secondary` column to suburbs.
+
+---
+
+### geography_trinity.json — Must Be Rebuilt If Postcodes Are Zero
+
+**Decision:** If geography_trinity.json shows zero or near-zero postcodes populated, the Australian Postcodes CSV was not downloaded correctly in the prior geography_builder run. The fix is to delete `data/raw/abs/australian_postcodes.csv` and re-run geography_builder.
+
+**Rationale:** Session 7 discovered that the Session 6 geography_builder run silently produced a trinity file with all postcodes missing (the CSV download error was caught and swallowed, leaving `postcode: null` for all suburbs). This caused 100% Domain 404 blocks because slugs were malformed (e.g., `adare-qld` instead of `adare-qld-4343`).
+
+**Detection:** After geography_builder finishes, check: `jq '[.[] | select(.postcode != null)] | length' data/raw/geography_trinity.json` — should be ≥ 8,620.
+
+**Revisit when:** ABS publishes an official SAL→POA concordance as a tabular file — replace the data.gov.au CSV with that.
+
+---
+
+### Deterministic Scorer — Normalisation Ranges v1.1
+
+**Decision:** Use these normalisation ranges for the v1.1 scoring engine. All ranges are linear with hard clamp at [0, 100].
+
+| Signal                | 0 pts (worst)   | 100 pts (best) | Rationale                                                                       |
+| --------------------- | --------------- | -------------- | ------------------------------------------------------------------------------- |
+| vacancy_rate          | 5% vacancy      | 0% vacancy     | SQM national avg ~1%; >5% = distressed; linear across the healthy range         |
+| stock_on_market       | 500 listings    | 0 listings     | 500 = very oversupplied suburb; absolute count (v1.2: normalise per dwelling)   |
+| population_growth     | 0% annual       | 3% annual      | ABS Tier 1 filter floor is 0.5%; 3% is ~top-decile national growth              |
+| sales_volume_momentum | −40% YoY        | +40% YoY       | Midpoint 0% → 50pts; ±40% spans observed real-world range                       |
+| relative_median       | $800k (ceiling) | $0             | Investor budget ceiling; any suburb at or above $800k scores 0 (v1.2: vs peers) |
+| infra_pipeline        | 0.0 confidence  | 1.0 confidence | LLM confidence score; always None in v1.1 (scraper not built yet)               |
+
+**Trade-offs flagged for v1.2:**
+
+- `stock_on_market` uses absolute listing count, not per-dwelling. A large suburb with 500 listings is different from a hamlet with 500. Needs dwelling count from ABS.
+- `relative_median` scores against a fixed $800k ceiling, not against neighbourhood peers. This means a $750k suburb in a $1.5M area scores the same as a $750k suburb in a $500k area. Per-suburb percentile ranking of medians would be more predictive.
+
+**Revisit when:** Formal 30-suburb eval set run — adjust ranges based on score distribution.
+
+---
+
+### Deterministic Scorer — Dynamic Re-weighting
+
+**Decision:** When a signal is missing (None), redistribute its weight proportionally across the remaining available signals. Weight sum always = 1.0.
+
+**Implementation:** `_apply_reweighting(base_weights, missing)` computes `scale = (available_weight + missing_weight) / available_weight` and multiplies each available signal's weight by `scale`. Missing signals get effective weight 0.0. Re-weighting is logged per suburb for auditability.
+
+**Rationale:** Missing signals are structurally expected in v1.1 — `infra_pipeline` has no scraper yet and is always None. Rural hamlets with <12 sales will have `number_sold` and `sales_volume_momentum` missing. Rather than refusing to score these suburbs or silently downscaling the total, proportional redistribution keeps the score on a 0-100 scale and reflects all available information.
+
+**Test confirmed:** A suburb with vacancy_rate, stock_on_market, population_growth only (3 of 6 signals) produces weight sum = 1.0000 exactly.
+
+**Revisit when:** Infra pipeline scraper is built — re-weighting will then only fire for data_thin suburbs.
+
+---
+
+### Signals Table — Normalised One-Row-Per-Signal Design
+
+**Decision:** Store each signal value as a separate row in the `signals` table with columns: (suburb_name, state, postcode, signal_name, value, source, unit, scraped_at). Upsert key: (suburb_name, state, signal_name, source).
+
+**Options considered:**
+
+- Wide table (one column per signal per suburb) — easier to query, harder to evolve; adding a new signal requires a schema change
+- Normalised row-per-signal — flexible, source-tagged, easy to add new signals without schema changes
+
+**Rationale:** The signal set will grow (infra_pipeline, school catchments, transport access, etc.). A row-per-signal design means adding a new signal is a new data row, not a new column. The `source` column allows multiple sources to provide the same signal type independently (e.g., ABS vacancy vs SQM vacancy) for cross-validation in future.
+
+**SQM postcode → suburb fan-out:** SQM data is postcode-level. The loader fans out one SQM record to all suburbs sharing that postcode. This is intentional — vacancy_rate for postcode 4064 applies to all suburbs in 4064 (Paddington, Milton, etc.).
+
+**Revisit when:** Querying signals becomes slow at scale — add a materialised view or pivot for the scorer to read from.
+
+---
+
 ## Scoring Weights History
 
 | Version | Date      | Vacancy | Stock | Population | Infra | Sales Volume | Relative Median | Notes                                                |

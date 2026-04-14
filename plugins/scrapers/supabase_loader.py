@@ -69,9 +69,28 @@ def bulk_upsert(dry_run: bool = False) -> dict:
         )
 
     suburbs = json.loads(TRINITY_PATH.read_text())
+
+    # Deduplicate by (suburb_name, state) — some suburbs straddle two LGA boundaries and
+    # appear twice in the SAL→LGA concordance with the same sal_code but different lga_name.
+    # The UNIQUE(suburb_name,state) Postgres constraint rejects intra-batch duplicates with
+    # error 21000. Keep the row with the largest population (primary / dominant LGA).
+    seen: dict[tuple, dict] = {}
+    for s in suburbs:
+        key = (s.get("suburb_name"), s.get("state"))
+        if key not in seen or (s.get("population") or 0) > (seen[key].get("population") or 0):
+            seen[key] = s
+    duplicates_dropped = len(suburbs) - len(seen)
+    if duplicates_dropped:
+        logger.warning(
+            "Deduplication: dropped %d rows with duplicate (suburb_name, state) — "
+            "suburbs spanning multiple LGAs. Kept dominant-LGA row.",
+            duplicates_dropped,
+        )
+    suburbs = list(seen.values())
+
     rows = [_suburb_row(s) for s in suburbs]
     total = len(rows)
-    logger.info("Supabase upsert: %d suburbs to load", total)
+    logger.info("Supabase upsert: %d unique suburbs to load (after dedup)", total)
 
     if dry_run:
         logger.info("DRY RUN — no data written")
