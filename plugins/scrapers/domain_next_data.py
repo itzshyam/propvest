@@ -310,10 +310,17 @@ class DomainNextData(BaseScraper):
         self,
         state_filter: str | None = None,
         limit: int = _DAILY_MAX,
+        offset: int = 0,
     ) -> list[str]:
         """
         Load domain_slugs from geography_trinity.json ordered by scrape tier.
         Hot > Warm > Cold > unclassified.
+
+        Args:
+            state_filter: Only load suburbs from this state (e.g. "QLD").
+            limit:        Max slugs to return.
+            offset:       Skip the first N slugs in the sorted list (for paginated batching).
+                          e.g. offset=75 skips the first 75, returning slugs 76-150.
         """
         trinity_path = ROOT / "data" / "raw" / "geography_trinity.json"
         if not trinity_path.exists():
@@ -332,12 +339,13 @@ class DomainNextData(BaseScraper):
         ]
 
         candidates.sort(key=lambda s: tier_order.get(s.get("scrape_tier"), 3))
-        slugs = [s["domain_slug"] for s in candidates[:limit]]
+        slugs = [s["domain_slug"] for s in candidates[offset:offset + limit]]
 
         logger.info(
-            "Scrape queue: %d slugs loaded (state=%s, limit=%d)",
+            "Scrape queue: %d slugs loaded (state=%s, offset=%d, limit=%d)",
             len(slugs),
             state_filter or "all",
+            offset,
             limit,
         )
         return slugs
@@ -414,6 +422,9 @@ if __name__ == "__main__":
     parser.add_argument("--suburb", help="Single slug, e.g. paddington-4064-qld")
     parser.add_argument("--state", help="State filter, e.g. QLD")
     parser.add_argument("--batch", type=int, default=10, help="Max suburbs to scrape")
+    parser.add_argument("--offset", type=int, default=0,
+                        help="Skip first N suburbs in queue (for paginated batching). "
+                             "e.g. --offset 75 scrapes suburbs 76-150 in tier order.")
     args = parser.parse_args()
 
     scraper = DomainNextData()
@@ -422,7 +433,7 @@ if __name__ == "__main__":
         result = scraper._scrape_suburb(args.suburb)
         print(json.dumps(result, indent=2))
     else:
-        queue = scraper._load_queue(state_filter=args.state, limit=args.batch)
+        queue = scraper._load_queue(state_filter=args.state, limit=args.batch, offset=args.offset)
         results = scraper.run(slugs=queue)
         print(f"\nDone. {len(results)} suburbs scraped → {OUTPUT_PATH}")
 

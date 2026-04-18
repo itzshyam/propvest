@@ -549,6 +549,68 @@ Example: `paddington-qld-4064` → `https://www.domain.com.au/suburb-profile/pad
 
 ---
 
+## Session 8 Decisions
+
+---
+
+### Deterministic Scorer — data_thin Exclusion by Default
+
+**Decision:** `--score-all` excludes suburbs flagged `data_thin` (<12 house sales) from output and from Supabase score writes by default. Add `--include-thin` flag to allow inspection.
+
+**Options considered:**
+
+- Score data_thin suburbs with lower confidence weight — rejected: arbitrary confidence factor, still misleads users
+- Write data_thin scores with a warning flag — rejected: any score for unreliable data risks anchoring investor decisions
+- Hard exclude with optional override — chosen: clean separation, `--include-thin` available for diagnostic use
+
+**Rationale:** The `data_thin` threshold (12 sales/year) was established in Session 4 as a reliability gate. Allowing data_thin suburbs into the ranked output would undermine Absolute #2 (Reliable). 85 of 282 scraped suburbs (30%) were data_thin — mainly rural hamlets and NT/TAS inland localities with <1 house sold per month. None should influence ranked output.
+
+**Implementation:** In `score_all_suburbs()`, after scoring loop, filter block removes data_thin suburbs and logs count. Flag stored in scorecard but not written to Supabase.
+
+**Trade-offs:** Investors cannot see data_thin rankings by default. Acceptable — `--include-thin` exists for edge-case inspection. Reassess quarterly when scrape cadence accumulates more sales data.
+
+**Revisit when:** A suburb persistently flagged data_thin requests manual override from user — add per-suburb override in config.
+
+---
+
+### SQM Scraper — `--state` Filter
+
+**Decision:** `_load_queue()` accepts `state_filter` parameter; CLI adds `--state` argument. Enables targeted per-state scraping.
+
+**Rationale:** The 80-request daily cap spans all Domain states. Without a state filter, a single run consumes the full cap nationally. State-targeted batches allow QLD, WA, NT, TAS to each receive a dedicated run on separate days, maximising coverage without blowing the daily cap.
+
+**Implementation:** Filter in list comprehension: `s.get("state", "").upper() == state_filter.upper()`. Deduplication by postcode then applies within the filtered set.
+
+**Revisit when:** SQM data updates move to a pull API — remove rate limit workarounds.
+
+---
+
+### Domain Scraper — `--offset` Batch Pagination
+
+**Decision:** `_load_queue()` accepts `offset` parameter; CLI adds `--offset` argument. Enables paginated scraping across large state queues.
+
+**Rationale:** QLD has 1,277+ Tier 1 Hot suburbs — far more than the 75/day daily cap. `--offset N` skips the first N suburbs in the sorted (tier-priority) queue, allowing batch 2 to start exactly where batch 1 ended. Reproducible, deterministic — same tier sort means the same suburbs appear in the same order every run.
+
+**Implementation:** `candidates[offset:offset + limit]` slice after tier sort. Returns empty list (not an error) when offset exceeds total candidates — confirmed for TAS (64 suburbs total, offset=75 → 0 returned).
+
+**Edge cases handled:** TAS with only 64 Tier 1 suburbs correctly returns 0 on `--offset 75`. NT with 117 suburbs correctly returns 42 on `--offset 75`.
+
+**Revisit when:** A priority suburb in batch 2 tier order needs to jump queue — implement explicit priority override list in config.
+
+---
+
+### Signals Loader — Intra-batch Deduplication
+
+**Decision:** Deduplicate `all_rows` by upsert key `(suburb_name, state, signal_name, source)` before batching. Tiebreak: keep row with most recent `scraped_at`.
+
+**Rationale:** geography_trinity.json contains 385+ duplicate (suburb_name, state) pairs from the ABS SAL→LGA M:N concordance join. Without dedup, the same signal row appeared twice within a batch → PostgreSQL error 21000 (`ON CONFLICT DO UPDATE command cannot affect row a second time`). Same pattern as the supabase_loader.py fix in Session 7.
+
+**Result:** 504 duplicate rows dropped in Session 8 run (13,857 raw → 13,353 unique); 0 errors.
+
+**Revisit when:** geography_trinity deduplication is pushed upstream into geography_builder — at that point this loader-level dedup becomes redundant but harmless.
+
+---
+
 ## Scoring Weights History
 
 | Version | Date      | Vacancy | Stock | Population | Infra | Sales Volume | Relative Median | Notes                                                |

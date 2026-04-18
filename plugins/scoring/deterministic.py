@@ -426,7 +426,10 @@ def build_signals_from_raw(
 # Batch scorer — reads from local JSON files, writes to Supabase suburbs table
 # ---------------------------------------------------------------------------
 
-def score_all_suburbs(write_to_supabase: bool = False) -> list[dict]:
+def score_all_suburbs(
+    write_to_supabase: bool = False,
+    include_thin: bool = False,
+) -> list[dict]:
     """
     Score all suburbs that have at least one signal available.
 
@@ -435,7 +438,13 @@ def score_all_suburbs(write_to_supabase: bool = False) -> list[dict]:
         data/raw/sqm_signals.json       — SQM vacancy + stock
         data/raw/geography_trinity.json — ABS population growth
 
-    Returns list of scorecard dicts.
+    Args:
+        write_to_supabase: Write scores back to Supabase suburbs table.
+        include_thin:      If False (default), data_thin suburbs are excluded from
+                           the returned list and never written to Supabase.
+                           Pass True (--include-thin flag) to include them.
+
+    Returns list of scorecard dicts (data_thin excluded by default).
     Optionally writes score + score_version back to Supabase suburbs table.
 
     NOTE: Supabase write requires migration 002_add_score_columns.sql to be run first.
@@ -485,7 +494,22 @@ def score_all_suburbs(write_to_supabase: bool = False) -> list[dict]:
         result = score_suburb(suburb_name, state, signals, weights)
         scorecards.append(result.to_dict())
 
-    logger.info("Scored %d suburbs", len(scorecards))
+    logger.info("Scored %d suburbs (total, including data_thin)", len(scorecards))
+
+    # Exclude data_thin suburbs unless caller explicitly opts in.
+    # data_thin = numberSold < 12 → signals statistically unreliable.
+    # These should never appear in rankings or be written to Supabase.
+    if not include_thin:
+        thin_excluded = [sc for sc in scorecards if sc["data_thin"]]
+        scorecards = [sc for sc in scorecards if not sc["data_thin"]]
+        if thin_excluded:
+            logger.info(
+                "Excluded %d data_thin suburbs from output (< 12 house sales — unreliable). "
+                "Use --include-thin to include them.",
+                len(thin_excluded),
+            )
+
+    logger.info("Returning %d scoreable suburbs", len(scorecards))
 
     if write_to_supabase and scorecards:
         _write_scores_to_supabase(scorecards)
@@ -638,6 +662,9 @@ if __name__ == "__main__":
     parser.add_argument("--write-supabase", action="store_true",
                         help="Write scores to Supabase (requires migration 002)")
     parser.add_argument("--top", type=int, default=20, help="Show top N suburbs (default 20)")
+    parser.add_argument("--include-thin", action="store_true",
+                        help="Include data_thin suburbs (< 12 house sales) in output. "
+                             "Excluded by default — signals unreliable below this threshold.")
     args = parser.parse_args()
 
     weights = load_weights()
@@ -650,7 +677,10 @@ if __name__ == "__main__":
             sys.exit(0 if passed else 1)
 
     if args.score_all:
-        scorecards = score_all_suburbs(write_to_supabase=args.write_supabase)
+        scorecards = score_all_suburbs(
+            write_to_supabase=args.write_supabase,
+            include_thin=args.include_thin,
+        )
 
         if not scorecards:
             print("\nNo scorecards produced — no Domain signals found.")
@@ -658,10 +688,11 @@ if __name__ == "__main__":
 
         sorted_cards = sorted(scorecards, key=lambda x: x["total_score"], reverse=True)
 
+        thin_note = "" if args.include_thin else "  (data_thin excluded — use --include-thin to see them)"
         print(f"\n{'=' * 70}")
-        print(f"SUBURB RANKINGS — Top {min(args.top, len(sorted_cards))} of {len(sorted_cards)}")
+        print(f"SUBURB RANKINGS — Top {min(args.top, len(sorted_cards))} of {len(sorted_cards)}{thin_note}")
         print(f"{'=' * 70}")
-        print(f"{'Rank':<5} {'Suburb':<35} {'State':<5} {'Score':>6} {'Missing'}")
+        print(f"{'Rank':<5} {'Suburb':<35} {'State':<5} {'Score':>6} {'Flags/Missing'}")
         print("-" * 70)
         for i, sc in enumerate(sorted_cards[:args.top], 1):
             missing = sc["missing_signals"]

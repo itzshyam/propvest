@@ -7,8 +7,8 @@
 
 ## Current Status
 
-**Phase:** 1 — Foundation (Session 7 Complete)
-**Focus:** Supabase suburbs table loaded (8,254 unique rows). Domain scrape complete for QLD/WA/NT/TAS (75 suburbs, 171 signals). Deterministic scoring engine v1.1 built and tested. Signals loader built and dry-run validated (11,964 rows ready). **Blocked on manual migration 002** before signals + scores can write to Supabase.
+**Phase:** 1 — Foundation (Session 8 Complete)
+**Focus:** Full scoring pipeline live. Domain batch 1+2 complete for QLD/WA/NT/TAS (282 suburbs scraped; 197 scoreable after data_thin exclusion). SQM vacancy+stock data for all 4 Domain states. 13,353 signals in Supabase. Scores written to suburbs table (197 rows, 0 errors). Top suburb: Furnissdale WA 94.6.
 
 ---
 
@@ -110,36 +110,60 @@
 - [x] **Session 7: Migration 002 SQL written** (`supabase/migrations/002_add_signals_and_scores.sql`)
   - Creates `signals` table with UNIQUE(suburb_name, state, signal_name, source)
   - ALTERs suburbs table: adds `score NUMERIC(5,2)`, `score_version TEXT`, `scored_at TIMESTAMPTZ`
-  - **NOT YET RUN** — manual action required in Supabase SQL Editor before Session 8
+  - Run manually in Supabase SQL Editor before Session 8 ✓
+- [x] **Session 8: signals_loader.py PostgreSQL 21000 fix**
+  - Intra-batch deduplication added by upsert key (suburb_name, state, signal_name, source)
+  - 504 duplicate rows dropped (multi-LGA suburbs); 13,353 unique rows loaded; 0 errors
+- [x] **Session 8: Deterministic scorer — data_thin exclusion**
+  - `--score-all` now excludes data_thin suburbs (<12 house sales) from output by default
+  - `--include-thin` flag added for inspection runs
+  - 85 data_thin suburbs excluded from 282 total → 197 scoreable suburbs written to Supabase
+- [x] **Session 8: SQM scraper — --state filter**
+  - `_load_queue()` accepts `state_filter` parameter; CLI `--state` argument added
+  - Enables targeted per-state scraping without consuming the full 80-suburb daily cap
+- [x] **Session 8: Domain scraper — --offset batching**
+  - `_load_queue()` accepts `offset` parameter; CLI `--offset` argument added
+  - Enables paginated scraping: batch 2 skips first 75 in sorted queue
+- [x] **Session 8: Domain batch 2 — QLD/WA/NT/TAS**
+  - QLD: 44 scraped, 30 no-house-data, 1 true block (1% block rate)
+  - WA: 49 scraped, 23 no-house-data, 3 true blocks (4% block rate)
+  - NT: 32 scraped, 8 no-house-data, 2 true blocks (5% block rate)
+  - TAS: 0 scraped (queue exhausted — TAS only has 64 Tier 1 suburbs, all done in batch 1)
+- [x] **Session 8: SQM WA/NT/TAS scrapes**
+  - WA: 73/75 postcodes, NT: 18/19, TAS: 14/14 — all 4 Domain states now have vacancy+stock
+- [x] **Session 8: Final scoring run**
+  - Tier reclassification: Hot=1290, Warm=2189, Cold=20 (290 suburbs updated)
+  - Signals loaded: 13,353 rows, 0 errors
+  - Scores written: 197 suburbs, 0 errors
+  - Top 20: Furnissdale WA 94.6 | Girraween NT 91.7 | Bees Creek NT 89.6
 
 ---
 
-## Up Next (Session 8 — Priority Order)
+## Up Next (Session 9 — Priority Order)
 
-### MANUAL ACTIONS REQUIRED BEFORE SESSION 8 STARTS
+1. **NSW/VIC/SA Valuer General data downloads** (manual action — Shyam)
+   - NSW: https://www.valuergeneral.nsw.gov.au/land_values/bulk_downloads.html → download latest .DAT
+   - VIC: https://www.land.vic.gov.au/valuations/resources-and-reports/property-sales-statistics → quarterly CSV
+   - SA: https://www.sa.gov.au/topics/housing/buying/property-sales-information → quarterly Excel
+   - Place in: `data/raw/valuer_general/` and run respective ingestors
 
-> Shyam must do these steps manually before the next AI session:
+2. **Expand scrape coverage — second pass Domain batches**
+   - QLD batch 3: `--state QLD --batch 75 --offset 150`
+   - WA batch 3: `--state WA --batch 75 --offset 150`
+   - NT batch 2 was small (~42); NT batch 3: `--state NT --batch 75 --offset 117` (check if needed)
 
-1. **Run migration 002 in Supabase SQL Editor**
-   - Go to: https://nqnvijfqnxfuwoygfnhs.supabase.co → SQL Editor
-   - Open and run: `supabase/migrations/002_add_signals_and_scores.sql`
-   - Verify: `signals` table created, `suburbs` table has `score` column
+3. **Formal 30-suburb eval set** — backtest v1.1 scorer against known high/low performers
+   - Compare top-ranked suburbs against 2021-2024 actual capital growth data
+   - Identify systematic biases (NT/vacancy overweighting? Price ceiling too blunt?)
 
-2. **Load signals into Supabase**
-   - `cd C:\Users\itzsh\Documents\Projects\Propvest`
-   - `.venv/Scripts/python -m plugins.scrapers.signals_loader`
-   - Expected: ~11,964 rows upserted, 0 errors
+4. **v1.2 scorer improvements** (after eval set)
+   - `stock_on_market`: per-dwelling normalisation (needs ABS dwelling counts)
+   - `relative_median`: percentile vs suburb peers, not fixed $800k ceiling
 
-3. **Run deterministic scorer**
-   - `.venv/Scripts/python -m plugins.scoring.deterministic --score-all --write-supabase`
-   - Expected: 170 suburbs scored and written to suburbs.score
-
-### Session 8 Objectives (once manual steps done)
-
-1. **Verify Supabase state**: signals queryable by suburb, scores visible in suburbs table
-2. **Continue Domain scrape**: Next batch QLD (75 suburbs, `--state QLD --batch 75 --offset 75`)
-3. **SQM for WA/NT/TAS**: Run SQM scraper for remaining states' postcodes
-4. **Scoring eval**: Run scorer on all available suburbs, review top 20 for sanity
+5. **Windmill workflow definitions** — Phase 1 backlog
+   - Automate weekly Domain scrape (75 Hot tier suburbs)
+   - Automate weekly SQM scrape (all postcodes)
+   - Trigger scorer after each scrape batch
 
 ---
 
@@ -156,17 +180,17 @@
 
 ## Known Data Files (gitignored, regeneratable)
 
-| File                                       | Purpose                                             | Regenerate with                                                      |
-| ------------------------------------------ | --------------------------------------------------- | -------------------------------------------------------------------- |
-| `data/raw/abs/erp_lga.csv`                 | Cached ABS ERP parse (546 LGAs)                     | Delete + re-run abs_ingestor.py                                      |
-| `data/raw/abs/ssc_to_lga.csv`              | SAL→LGA concordance (16,630 rows)                   | Delete + re-run abs_ingestor.py                                      |
-| `data/raw/abs/australian_postcodes.csv`    | data.gov.au postcode lookup (18,559 rows)           | Auto-downloaded by geography_builder if missing                      |
-| `data/raw/abs/multi_postcode_suburbs.json` | 704 suburbs with multiple postcodes (audit log)     | Re-run geography_builder                                             |
-| `data/raw/tier1_candidates.json`           | 8,639 Tier 1 suburbs (abs_ingestor)                 | `python -m plugins.scrapers.abs_ingestor`                            |
-| `data/raw/geography_trinity.json`          | 8,254 unique suburbs with postcodes + tiers + slugs | `python -m plugins.scrapers.geography_builder` then tier_classifier  |
-| `data/raw/domain_signals.json`             | Domain scrape results — 171 signals (QLD/WA/NT/TAS) | `python -m plugins.scrapers.domain_next_data --state QLD --batch 75` |
-| `data/raw/sqm_signals.json`                | SQM vacancy + stock — 75 QLD postcodes              | `python -m plugins.scrapers.sqm_scraper --batch 75`                  |
-| `data/raw/scrape_log.json`                 | Run log (all scraper runs)                          | Append-only, do not delete                                           |
+| File                                       | Purpose                                                        | Regenerate with                                                      |
+| ------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `data/raw/abs/erp_lga.csv`                 | Cached ABS ERP parse (546 LGAs)                                | Delete + re-run abs_ingestor.py                                      |
+| `data/raw/abs/ssc_to_lga.csv`              | SAL→LGA concordance (16,630 rows)                              | Delete + re-run abs_ingestor.py                                      |
+| `data/raw/abs/australian_postcodes.csv`    | data.gov.au postcode lookup (18,559 rows)                      | Auto-downloaded by geography_builder if missing                      |
+| `data/raw/abs/multi_postcode_suburbs.json` | 704 suburbs with multiple postcodes (audit log)                | Re-run geography_builder                                             |
+| `data/raw/tier1_candidates.json`           | 8,639 Tier 1 suburbs (abs_ingestor)                            | `python -m plugins.scrapers.abs_ingestor`                            |
+| `data/raw/geography_trinity.json`          | 8,254 unique suburbs with postcodes + tiers + slugs            | `python -m plugins.scrapers.geography_builder` then tier_classifier  |
+| `data/raw/domain_signals.json`             | Domain scrape results — 282 suburbs (QLD/WA/NT/TAS, batch 1+2) | `python -m plugins.scrapers.domain_next_data --state QLD --batch 75` |
+| `data/raw/sqm_signals.json`                | SQM vacancy + stock — QLD/WA/NT/TAS postcodes (all 4 states)   | `python -m plugins.scrapers.sqm_scraper --state QLD --batch 75`      |
+| `data/raw/scrape_log.json`                 | Run log (all scraper runs)                                     | Append-only, do not delete                                           |
 
 ## Manual Source Files (not regeneratable)
 

@@ -247,11 +247,15 @@ class SqmScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Queue management
     # ------------------------------------------------------------------
-    def _load_queue(self) -> list[str]:
+    def _load_queue(self, state_filter: str | None = None) -> list[str]:
         """
         Load unique postcodes from geography_trinity.json.
         Tier1 suburbs only, with non-empty postcodes.
         Ordered: Hot tier first (highest scrape priority).
+
+        Args:
+            state_filter: If set (e.g. "WA"), only load postcodes from that state.
+                          If None, loads all Domain-scraped states (QLD/WA/NT/TAS/ACT).
         """
         trinity_path = ROOT / "data" / "raw" / "geography_trinity.json"
         if not trinity_path.exists():
@@ -264,6 +268,7 @@ class SqmScraper(BaseScraper):
         suburbs_with_pc = [
             s for s in suburbs
             if s.get("is_tier1") and s.get("postcode", "").strip()
+            and (state_filter is None or s.get("state", "").upper() == state_filter.upper())
         ]
         suburbs_with_pc.sort(key=lambda s: tier_order.get(s.get("scrape_tier"), 3))
 
@@ -282,7 +287,7 @@ class SqmScraper(BaseScraper):
                 "Run geography_builder with POA concordance to populate postcodes."
             )
 
-        logger.info("SQM queue: %d unique postcodes", len(postcodes))
+        logger.info("SQM queue: %d unique postcodes (state=%s)", len(postcodes), state_filter or "all")
         return postcodes
 
     # ------------------------------------------------------------------
@@ -316,6 +321,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="SQM Research scraper")
     parser.add_argument("--postcode", help="Single postcode to scrape, e.g. 4064")
+    parser.add_argument("--state", help="Filter postcodes by state, e.g. WA, NT, TAS")
     parser.add_argument("--batch", type=int, default=10, help="Max postcodes to scrape")
     args = parser.parse_args()
 
@@ -325,7 +331,7 @@ if __name__ == "__main__":
         result = scraper._scrape_postcode(args.postcode)
         print(json.dumps(result, indent=2))
     else:
-        queue = scraper._load_queue()[:args.batch]
+        queue = scraper._load_queue(state_filter=args.state)[:args.batch]
         results = scraper.run(postcodes=queue)
         print(f"\nDone. {len(results)} postcodes scraped → {OUTPUT_PATH}")
 
