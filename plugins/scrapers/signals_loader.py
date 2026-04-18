@@ -234,6 +234,25 @@ def load_signals(dry_run: bool = False) -> dict:
 
     all_rows.extend(_abs_to_signal_rows(trinity_records))
 
+    # Deduplicate by upsert key (suburb_name, state, signal_name, source).
+    # geography_trinity.json contains 385+ duplicate (suburb_name, state) pairs from the
+    # ABS SAL→LGA M:N concordance join. Without dedup, the same conflict key appears twice
+    # in one batch → PostgreSQL error 21000. Mirror of the supabase_loader.py fix.
+    # Tiebreak: keep the row with the most recent scraped_at.
+    seen: dict[tuple, dict] = {}
+    for row in all_rows:
+        key = (row["suburb_name"], row["state"], row["signal_name"], row["source"])
+        if key not in seen or (row.get("scraped_at") or "") >= (seen[key].get("scraped_at") or ""):
+            seen[key] = row
+    duplicates_dropped = len(all_rows) - len(seen)
+    if duplicates_dropped:
+        logger.warning(
+            "Deduplication: dropped %d duplicate signal rows (same upsert key) — "
+            "likely from multi-LGA suburbs in geography_trinity.json",
+            duplicates_dropped,
+        )
+    all_rows = list(seen.values())
+
     logger.info("Signals to load: %d rows from %d Domain, %d SQM, %d ABS records",
                 len(all_rows), len(domain_records), len(sqm_records), len(trinity_records))
 
