@@ -96,19 +96,19 @@ Hermes should self-improve these skills based on outcomes:
 
 ---
 
-## Known Data File Locations (as of Session 7)
+## Known Data File Locations (as of Session 8)
 
-| File                                       | Purpose                                               | Regenerate with                                                                        |
-| ------------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `data/raw/abs/erp_lga.csv`                 | Cached ABS ERP parse (546 LGAs)                       | Delete + re-run `abs_ingestor.py`                                                      |
-| `data/raw/abs/ssc_to_lga.csv`              | Cached SAL→LGA concordance (16,630 rows)              | Delete + re-run `abs_ingestor.py`                                                      |
-| `data/raw/abs/australian_postcodes.csv`    | data.gov.au postcode lookup (18,559 rows)             | Auto-downloaded by `geography_builder` if missing                                      |
-| `data/raw/abs/multi_postcode_suburbs.json` | 704 suburbs mapped to multiple postcodes              | Re-run `geography_builder`                                                             |
-| `data/raw/tier1_candidates.json`           | 8,639 Tier 1 suburbs with ABS growth rates            | `python -m plugins.scrapers.abs_ingestor`                                              |
-| `data/raw/geography_trinity.json`          | 8,254 unique suburbs with postcodes + tiers + slugs   | `python -m plugins.scrapers.geography_builder` then `tier_classifier --mode bootstrap` |
-| `data/raw/domain_signals.json`             | 171 Domain signals — QLD/WA/NT/TAS (Session 7)        | `python -m plugins.scrapers.domain_next_data --state QLD --batch 75`                   |
-| `data/raw/sqm_signals.json`                | 75 QLD postcode signals — vacancy + stock (Session 7) | `python -m plugins.scrapers.sqm_scraper --batch 75`                                    |
-| `data/raw/scrape_log.json`                 | Run log (all scraper runs) — append-only              | Do not delete                                                                          |
+| File                                       | Purpose                                                      | Regenerate with                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `data/raw/abs/erp_lga.csv`                 | Cached ABS ERP parse (546 LGAs)                              | Delete + re-run `abs_ingestor.py`                                                      |
+| `data/raw/abs/ssc_to_lga.csv`              | Cached SAL→LGA concordance (16,630 rows)                     | Delete + re-run `abs_ingestor.py`                                                      |
+| `data/raw/abs/australian_postcodes.csv`    | data.gov.au postcode lookup (18,559 rows)                    | Auto-downloaded by `geography_builder` if missing                                      |
+| `data/raw/abs/multi_postcode_suburbs.json` | 704 suburbs mapped to multiple postcodes                     | Re-run `geography_builder`                                                             |
+| `data/raw/tier1_candidates.json`           | 8,639 Tier 1 suburbs with ABS growth rates                   | `python -m plugins.scrapers.abs_ingestor`                                              |
+| `data/raw/geography_trinity.json`          | 8,254 unique suburbs with postcodes + tiers + slugs          | `python -m plugins.scrapers.geography_builder` then `tier_classifier --mode bootstrap` |
+| `data/raw/domain_signals.json`             | 282 Domain signals — QLD/WA/NT/TAS batch 1+2 (Session 8)     | `python -m plugins.scrapers.domain_next_data --state QLD --batch 75`                   |
+| `data/raw/sqm_signals.json`                | QLD/WA/NT/TAS postcode signals — vacancy + stock (Session 8) | `python -m plugins.scrapers.sqm_scraper --state QLD --batch 75`                        |
+| `data/raw/scrape_log.json`                 | Run log (all scraper runs) — append-only                     | Do not delete                                                                          |
 
 Manual source files (not regeneratable automatically):
 
@@ -119,24 +119,26 @@ Manual source files (not regeneratable automatically):
 
 ---
 
-## Known Issues / Gotchas (Session 7)
+## Known Issues / Gotchas (Session 8)
 
 - **SQM `graph_listings.php` is 404** as of April 2026. Correct URL: `/property/total-property-listings`
 - **Domain "block rate" false positive**: small rural hamlets return 200 OK with no house data —
   this is NOT a WAF block. Only count 403/429 responses as true blocks.
 - **ACT has 0 qualifying Tier 1 suburbs** — LGA growth filter excludes ACT LGAs. Investigate separately if ACT coverage needed.
-- **Migration 002 not yet run** — `signals` table and `suburbs.score` column do not exist. Run
-  `supabase/migrations/002_add_signals_and_scores.sql` in Supabase SQL Editor before Session 8.
 - **10 suburbs have no postcode** — national parks and territories (Blue Mountains NP, Moreton Bay area, etc.). These will never have Domain data and are data_thin by definition.
 - **geography_trinity.json silent failure mode** — if `australian_postcodes.csv` download fails during
   geography_builder, all postcodes come out null and all Domain slugs are malformed → 100% apparent block rate.
   Detection: count non-null postcodes after rebuild; should be ≥ 8,620.
 - **True suburb count is 8,254 not 8,639** — SAL→LGA M:N join creates 385 duplicate (suburb_name, state)
   pairs; supabase_loader deduplicates before upsert. The raw geography_trinity.json still has 8,639 rows.
-- **SQM signals only cover QLD** — WA/NT/TAS postcodes not yet scraped; those suburbs will have
-  vacancy_rate and stock_on_market missing (dynamic re-weighting will fire for them in scorer).
+- **30% data_thin rate** — 85 of 282 scraped suburbs have <12 house sales/year. Primarily rural QLD hamlets
+  and small NT/TAS inland localities. Excluded from `--score-all` by default; use `--include-thin` to inspect.
+- **WA price ceiling pressure** — multiple top-20 WA suburbs now flagged `[>$800k]`. WA medians rising;
+  monitor whether these drop out of investable universe over the next scrape cycle.
+- **TAS fully covered in batch 1** — TAS has only 64 Tier 1 suburbs total. `--offset 75` returns 0 for TAS.
+  No further Domain batches needed for TAS until next quarterly cycle.
 
 ---
 
-_Last updated: Session 7_
+_Last updated: Session 8_
 _Hermes workspace: C:\Users\itzsh\Documents\Projects\Propvest_

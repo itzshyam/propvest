@@ -92,7 +92,7 @@ Suburbs are classified into scrape tiers based on turnover velocity:
 **Bootstrap:** ABS growth rate from tier1_candidates.json used for initial classification.
 **Reclassification:** After first scrape pass, actual DOM from Domain replaces ABS growth as classifier.
 
-**Current tier counts (post Session 7 reclassification):** Hot=1,277 / Warm=2,209 / Cold=13
+**Current tier counts (post Session 8 reclassification):** Hot=1,290 / Warm=2,189 / Cold=20
 
 ---
 
@@ -265,16 +265,16 @@ Camoufox had a year-long maintenance gap and is confirmed experimental/unstable 
       abs_ingestor.py         ✓ BUILT — 8,639 Tier 1 suburbs
       geography_builder.py    ✓ BUILT (Session 6: data.gov.au postcode enrichment, fixed slug)
       supabase_loader.py      ✓ BUILT (Session 7: dedup fix — 8,254 unique suburbs loaded)
-      signals_loader.py       ✓ BUILT (Session 7: Domain + SQM + ABS → Supabase signals table)
+      signals_loader.py       ✓ BUILT (Session 8: dedup fix → 13,353 rows, 0 errors; Session 7: Domain + SQM + ABS → Supabase signals table)
       nsw_valuer_general.py   ✓ BUILT — NSW .DAT bulk parser (awaiting data files)
       vic_valuer_general.py   ✓ BUILT — VIC Data.Vic CSV parser (awaiting data files)
       sa_valuer_general.py    ✓ BUILT — SA VG Excel parser (awaiting data files)
-      domain_next_data.py     ✓ BUILT (Session 6: block detection fixed, first run complete)
-      sqm_scraper.py          ✓ BUILT (Session 6: URL + parser fixed, first run complete)
+      domain_next_data.py     ✓ BUILT (Session 8: --offset batching; batch 1+2 complete — 282 suburbs QLD/WA/NT/TAS)
+      sqm_scraper.py          ✓ BUILT (Session 8: --state filter; QLD/WA/NT/TAS all scraped)
     /scoring
       __init__.py
       tier_classifier.py      ✓ BUILT — bootstrap + DOM reclassify (Session 7: 4-state reclassify run)
-      deterministic.py        ✓ BUILT (Session 7: v1.1, dynamic re-weighting, all tests pass)
+      deterministic.py        ✓ BUILT (Session 8: data_thin exclusion + --include-thin flag; 197 scored, 85 excluded)
       llm_explainer.py        ← TODO (explain only, never compute)
     /signals
       vacancy_rate.py         ← TODO Phase 1 backlog
@@ -289,14 +289,13 @@ Camoufox had a year-long maintenance gap and is confirmed experimental/unstable 
       /domain
       tier1_candidates.json       ✓ EXISTS (gitignored)
       geography_trinity.json      ✓ EXISTS (gitignored) — 8,254 unique suburbs, postcodes + tiers + slugs
-      domain_signals.json         ✓ EXISTS (gitignored) — 171 signals, QLD/WA/NT/TAS (Session 7)
-      sqm_signals.json            ✓ EXISTS (gitignored) — 75 QLD postcode signals (Session 7)
+      domain_signals.json         ✓ EXISTS (gitignored) — 282 suburbs, QLD/WA/NT/TAS batch 1+2 (Session 8)
+      sqm_signals.json            ✓ EXISTS (gitignored) — QLD/WA/NT/TAS all 4 states (Session 8)
       scrape_log.json             ✓ EXISTS (gitignored)
   /supabase
     /migrations
       001_create_core_tables.sql  ✓ BUILT + RUN — suburbs table loaded (8,254 rows)
-      002_add_signals_and_scores.sql  ✓ BUILT (Session 7: signals table + score columns)
-                                      ⚠️ NOT YET RUN — manual action required before Session 8
+      002_add_signals_and_scores.sql  ✓ BUILT + RUN — signals table + score columns exist
   /workflows                  ← TODO Phase 1 backlog: Windmill definitions
   /skills                     ← Hermes SKILL.md files
   /api                        ← TODO Phase 2
@@ -321,23 +320,17 @@ ABS SAL→POA concordance ZIPs all return 404. Postcode enrichment uses **data.g
 
 ## Supabase Setup
 
-Migration 001 run. Migration 002 pending.
+Both migrations run. Full scoring pipeline live.
 
 **Migration 001 (complete):** suburbs, scrape_log, api_cost_log tables exist.
 
 - `suburbs` table: 8,254 unique suburbs loaded
-- `base_scraper.log_run()` writes to `scrape_log` table (file fallback always active)
 
-**Migration 002 (PENDING — manual action required before Session 8):**
+**Migration 002 (complete):** signals table + score columns exist.
 
-```
-1. Go to Supabase SQL Editor (https://nqnvijfqnxfuwoygfnhs.supabase.co)
-2. Run: supabase/migrations/002_add_signals_and_scores.sql
-3. Then run: .venv/Scripts/python -m plugins.scrapers.signals_loader
-   Expected: ~11,964 signal rows upserted
-4. Then run: .venv/Scripts/python -m plugins.scoring.deterministic --score-all --write-supabase
-   Expected: 170 suburbs scored, scores written to suburbs.score
-```
+- `signals` table: 13,353 rows (282 Domain × ~6 signals + QLD/WA/NT/TAS SQM + 8,639 ABS growth)
+- `suburbs.score`: 197 rows written (85 data_thin excluded from default output)
+- Top suburb: Furnissdale WA 94.6 | Girraween NT 91.7 | Bees Creek NT 89.6
 
 **Note on suburb count:** geography_trinity.json contains 8,639 records but the ABS SAL→LGA concordance
 is M:N — 385 suburbs straddle two LGAs and appear twice. supabase_loader deduplicates to 8,254 unique
@@ -366,5 +359,5 @@ is M:N — 385 suburbs straddle two LGAs and appear twice. supabase_loader dedup
 
 ---
 
-_Last updated: Session 7_
-_Next: Session 8 — Run migration 002 (manual) → load signals → score all suburbs → continue Domain scrape_
+_Last updated: Session 8_
+_Next: Session 9 — NSW/VIC/SA Valuer General ingestion (manual data download needed) → Domain batch 3 → 30-suburb eval set_

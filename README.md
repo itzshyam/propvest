@@ -72,23 +72,23 @@ Scoring is fully deterministic — the LLM explains scores, never computes them.
 
 ## Project Status
 
-Currently in **Phase 1 — Foundation (Session 7 complete).**
+Currently in **Phase 1 — Foundation (Session 8 complete).**
 
-| Component                      | Status                                                   |
-| ------------------------------ | -------------------------------------------------------- |
-| ABS Growth Funnel ingestor     | ✓ Complete — 8,639 Tier 1 suburbs                        |
-| Geography Trinity builder      | ✓ Complete — postcodes + slugs populated (8,254 unique)  |
-| Scrape tier classifier         | ✓ Complete — Hot=1,277 / Warm=2,209 / Cold=13            |
-| Domain scraper (QLD/WA/NT/TAS) | ✓ Running — 171 signals across 4 states                  |
-| SQM scraper (national)         | ✓ Running — 75 QLD postcodes; WA/NT/TAS pending          |
-| NSW/VIC/SA Valuer General      | ✓ Built — awaiting data file downloads                   |
-| Supabase suburbs table         | ✓ Loaded — 8,254 rows (migration 001 run)                |
-| Deterministic scoring engine   | ✓ Built — v1.1, dynamic re-weighting, all tests pass     |
-| Signals loader                 | ✓ Built — 11,964 rows ready; blocked on migration 002    |
-| Supabase migration 002         | ⚠ Written — not yet run (manual action needed before S8) |
-| Windmill workflow definitions  | ← TODO Phase 1 backlog                                   |
-| FastAPI backend                | ← TODO Phase 2                                           |
-| Next.js frontend               | ← TODO Phase 2                                           |
+| Component                      | Status                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| ABS Growth Funnel ingestor     | ✓ Complete — 8,639 Tier 1 suburbs                                          |
+| Geography Trinity builder      | ✓ Complete — postcodes + slugs populated (8,254 unique)                    |
+| Scrape tier classifier         | ✓ Complete — Hot=1,290 / Warm=2,189 / Cold=20                              |
+| Domain scraper (QLD/WA/NT/TAS) | ✓ Running — 282 suburbs, batch 1+2 complete; --offset batching added       |
+| SQM scraper (national)         | ✓ Running — QLD/WA/NT/TAS all scraped; --state filter added                |
+| NSW/VIC/SA Valuer General      | ✓ Built — awaiting data file downloads                                     |
+| Supabase suburbs table         | ✓ Loaded — 8,254 rows (migration 001 run)                                  |
+| Supabase signals table         | ✓ Loaded — 13,353 rows, 0 errors (migration 002 run)                       |
+| Deterministic scoring engine   | ✓ Running — v1.1, 197 suburbs scored; data_thin exclusion + --include-thin |
+| Signals loader                 | ✓ Running — 13,353 rows, 0 errors; intra-batch dedup fix applied           |
+| Windmill workflow definitions  | ← TODO Phase 1 backlog                                                     |
+| FastAPI backend                | ← TODO Phase 2                                                             |
+| Next.js frontend               | ← TODO Phase 2                                                             |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for full technical design and [TODO.md](./TODO.md) for current session state.
 

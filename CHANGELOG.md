@@ -18,6 +18,44 @@
 
 ---
 
+## [0.8.0] — 2026-04-18
+
+### Added
+
+- `plugins/scoring/deterministic.py` — **data_thin exclusion from scored output**
+  - `score_all_suburbs()` filters out `data_thin` suburbs (< 12 house sales) by default
+  - `--include-thin` CLI flag added for inspection/diagnostic runs
+  - Ranking header updated to `Flags/Missing`; footer note shown when data_thin excluded
+  - 85 of 282 scraped suburbs excluded (30%); 197 scoreable suburbs written to Supabase
+- `plugins/scrapers/sqm_scraper.py` — **`--state` filter for per-state targeting**
+  - `_load_queue()` accepts `state_filter: str | None = None` parameter
+  - CLI `--state` argument added (e.g. `--state WA`)
+  - Enables targeted per-state scraping without consuming full 80/day daily cap across all states
+- `plugins/scrapers/domain_next_data.py` — **`--offset` for paginated batch scraping**
+  - `_load_queue()` accepts `offset: int = 0` parameter
+  - CLI `--offset` argument added; help text documents use case for paginated batching
+  - Returns empty list (not error) when offset exceeds total candidates (e.g. TAS offset=75)
+
+### Changed
+
+- `plugins/scrapers/signals_loader.py`
+  - Intra-batch deduplication added by upsert key `(suburb_name, state, signal_name, source)`
+  - Tiebreak: most recent `scraped_at` wins per duplicate pair
+  - 504 duplicate rows dropped in Session 8 run; 13,353 unique rows loaded; 0 errors
+  - (Fix committed end of Session 8 pre-compaction — included here for changelog completeness)
+
+### Notes
+
+- Domain batch 2 complete: QLD 44 + WA 49 + NT 32 scraped; TAS queue exhausted (64 suburbs total)
+- SQM expanded: WA (73/75) + NT (18/19) + TAS (14/14) — all 4 Domain states now have vacancy+stock
+- Tier reclassification post-batch-2: Hot=1,290 / Warm=2,189 / Cold=20 (290 suburbs updated)
+- Signals: 13,353 rows, 0 errors → Supabase
+- Final scores: 197 suburbs written, 0 errors; top suburb: Furnissdale WA 94.6
+- NT dominates top rankings due to genuinely low vacancy rates (~0.5–1%) + strong ABS growth
+- WA price ceiling pressure: multiple top-20 WA suburbs now above $800k median
+
+---
+
 ## [0.7.0] — 2026-04-14
 
 ### Added
